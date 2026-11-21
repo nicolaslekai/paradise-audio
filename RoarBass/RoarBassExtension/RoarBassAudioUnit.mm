@@ -13,6 +13,7 @@
 #include <cstring>
 #include <memory>
 #include <fenv.h>
+#include <atomic>
 #if defined(__x86_64__) || defined(__i386__)
 #include <xmmintrin.h>
 #endif
@@ -53,6 +54,9 @@ static AUParameter *MakeParam(AUParameterAddress addr,
     AVAudioFormat               *_outputFormat;
     AUHostMusicalContextBlock    _musicalContext;
     AUHostTransportStateBlock    _transportState;
+    // Scope tap: the audio thread writes, the editor reads (see readScope:count:).
+    float                        _scope[8192];
+    std::atomic<uint32_t>        _scopeW;
 }
 
 @synthesize parameterTree = _parameterTree;
@@ -64,6 +68,7 @@ static AUParameter *MakeParam(AUParameterAddress addr,
     self = [super initWithComponentDescription:componentDescription options:options error:outError];
     if (!self) return nil;
 
+    std::memset(_scope, 0, sizeof(_scope)); _scopeW.store(0);
     _engine = std::make_unique<Engine>();
     _engine->prepare(44100.0f);
 
@@ -214,6 +219,8 @@ static AUParameter *MakeParam(AUParameterAddress addr,
 - (AUInternalRenderBlock)internalRenderBlock {
     Engine *eng = _engine.get();
     __block std::vector<float> *ownOutBuf = &_ownOutBuf;
+    float *scope = _scope;
+    std::atomic<uint32_t> *scopeW = &_scopeW;
     return ^AUAudioUnitStatus(AudioUnitRenderActionFlags *actionFlags,
                               const AudioTimeStamp       *timestamp,
                               AVAudioFrameCount           frameCount,
@@ -292,6 +299,14 @@ static AUParameter *MakeParam(AUParameterAddress addr,
         }
         renderSegment(cursor, frameCount);
 
+        // Scope tap: newest output into the ring (8192 = power of two, index wraps by mask).
+        {
+            const float *L = (const float *)outputData->mBuffers[0].mData;
+            uint32_t w = scopeW->load(std::memory_order_relaxed);
+            for (AVAudioFrameCount i = 0; i < frameCount; ++i) scope[(w + i) & 8191u] = L[i];
+            scopeW->store(w + frameCount, std::memory_order_release);
+        }
+
         // mark buffers as having valid data
         for (UInt32 b = 0; b < outputData->mNumberBuffers; ++b) {
             outputData->mBuffers[b].mDataByteSize = frameCount * sizeof(float);
@@ -299,6 +314,17 @@ static AUParameter *MakeParam(AUParameterAddress addr,
         return noErr;
     };
 }
+
+#pragma mark - Editor taps
+
+- (NSInteger)readScope:(float *)dst count:(NSInteger)count {
+    if (!dst || count <= 0) return 0;
+    const NSInteger n = count > 8192 ? 8192 : count;
+    const uint32_t w = _scopeW.load(std::memory_order_acquire);
+    for (NSInteger i = 0; i < n; ++i) dst[i] = _scope[(w - (uint32_t)n + (uint32_t)i) & 8191u];
+    return n;
+}
+- (double)scopeSampleRate { return _outputBus.format.sampleRate > 0 ? _outputBus.format.sampleRate : 48000.0; }
 
 #pragma mark - AU metadata
 

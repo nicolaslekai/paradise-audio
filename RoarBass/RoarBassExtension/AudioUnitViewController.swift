@@ -18,7 +18,7 @@ public class AudioUnitViewController: AUViewController, AUAudioUnitFactory {
         super.viewDidLoad()
         // Use a sensible default size; Logic respects this.
         if preferredContentSize == .zero {
-            preferredContentSize = NSSize(width: 1000, height: 440)
+            preferredContentSize = NSSize(width: 1000, height: 500)
         }
         installViewIfReady()
         watchEditorVisibility()
@@ -69,7 +69,7 @@ public class AudioUnitViewController: AUViewController, AUAudioUnitFactory {
 
     public override func loadView() {
         // Provide our custom dark panel.
-        let v = RoarBassParameterView(frame: NSRect(x: 0, y: 0, width: 1000, height: 440))
+        let v = RoarBassParameterView(frame: NSRect(x: 0, y: 0, width: 1000, height: 500))
         self.view = v
         self.paramView = v
     }
