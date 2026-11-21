@@ -67,3 +67,6 @@ UltraReverse/tests/bin/
 /PROJECT.md
 /Tools/
 /build_changed.sh
+
+# website lives in its own repo
+/website/
