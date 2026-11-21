@@ -241,6 +241,19 @@ const float kPresets[10][kNumParams] = {
     const double sr = _sampleRate > 0 ? (double)_sampleRate : 48000.0;
     return (double)_dsp->latencySamples() / sr;
 }
+/// What keeps ringing after the input stops: the DELAY repeats (one pass per
+/// 20·log10(FB) dB down to −60 dB) and the REVERB, when those modules are on.
+/// It reported 0, so a host was free to cut the tail on a bounce.
+- (NSTimeInterval)tailTime {
+    double t = 0.0;
+    if (_p[9].load() >= 0.5f) {                                   // dlOn
+        const double fb = fmin(0.95, fmax(0.0, (double)_p[11].load()));
+        const double passes = fb > 0.001 ? ceil(-60.0 / (20.0 * log10(fb))) : 0.0;
+        t = (double)_p[10].load() * 0.001 * (passes + 1.0);
+    }
+    if (_p[18].load() >= 0.5f) t = fmax(t, 1.0 + 4.0 * (double)_p[19].load());   // rvOn, rvSize
+    return fmin(60.0, t);
+}
 
 - (AUInternalRenderBlock)internalRenderBlock {
     __block vbx::VoiceBoxEngine *dsp = _dsp.get();

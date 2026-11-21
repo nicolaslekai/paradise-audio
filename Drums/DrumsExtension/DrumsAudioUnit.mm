@@ -252,6 +252,11 @@ static NSString * const kParadiseStateKey = @"paradiseDrumState";
 }
 - (void)deallocateRenderResources { [super deallocateRenderResources]; if (_dsp) _dsp->reset(); }
 
+/// How long the kit keeps sounding after the last trigger: LONG SUB rings up
+/// to 3 s, crash + reverb about as long. It reported 0, so a host was free to
+/// stop rendering / cut a bounce the moment the region ended.
+- (NSTimeInterval)tailTime { return 4.0; }
+
 - (AUInternalRenderBlock)internalRenderBlock {
     __block drm::DrumsEngine *dsp = _dsp.get();
     __block std::atomic<float> *aG = &_gain;

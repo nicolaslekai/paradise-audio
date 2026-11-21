@@ -443,6 +443,10 @@ static NSString * const kSynthStateKey = @"paradiseSynthState";
 
 - (void)deallocateRenderResources { [super deallocateRenderResources]; if (_dsp) _dsp->reset(); }
 
+/// Releases run up to ~1.5 s (BELL) and the built-in delay / reverb ring on
+/// after that. It reported 0, so a host was free to cut the tail on a bounce.
+- (NSTimeInterval)tailTime { return 5.0; }
+
 - (AUInternalRenderBlock)internalRenderBlock {
     __block synthk::SynthThingEngine *dsp = _dsp.get();
     // unsafe_unretained: refetch musicalContextBlock + transportStateBlock

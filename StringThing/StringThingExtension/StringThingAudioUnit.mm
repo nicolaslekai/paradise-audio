@@ -424,6 +424,10 @@ static NSString * const kSynthStateKey = @"paradiseSynthState";
 
 - (void)deallocateRenderResources { [super deallocateRenderResources]; if (_dsp) _dsp->reset(); }
 
+/// Bowed releases and plucked strings ring for about 3 s, plus the built-in
+/// delay / reverb. It reported 0, so a host was free to cut the tail on a bounce.
+- (NSTimeInterval)tailTime { return 6.0; }
+
 - (AUInternalRenderBlock)internalRenderBlock {
     __block stringk::StringThingEngine *dsp = _dsp.get();
     // unsafe_unretained: refetch musicalContextBlock + transportStateBlock

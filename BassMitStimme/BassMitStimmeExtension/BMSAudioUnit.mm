@@ -510,6 +510,10 @@ struct BMSStimmeBuf {
 }
 - (void)deallocateRenderResources { [super deallocateRenderResources]; if (_dsp) _dsp->reset(); }
 
+/// Release to −60 dB is about 7 × the RELEASE time (2 s at the default 0.32 s),
+/// plus the vocal reverb. It reported 0, so a host was free to cut the tail.
+- (NSTimeInterval)tailTime { return fmin(30.0, 7.0 * (double)_ar.load() + 1.5); }
+
 - (AUInternalRenderBlock)internalRenderBlock {
     __block bms::Engine *dsp = _dsp.get();
     __block std::atomic<float> *aOct=&_oct,*aDet=&_det,*aSub=&_sub,*aFmA=&_fmA,*aFmR=&_fmR,*aNoi=&_noi;

@@ -251,6 +251,11 @@ enum : AUParameterAddress { kHF=0, kNR=1, kTr=2, kWa=3, kLv=4, kMx=5, kPt=6 };
 - (void)freeBounce { _bounce.freeBuf(); }
 - (void)deallocateRenderResources { [super deallocateRenderResources]; if (_dsp) _dsp->reset(); }
 
+/// GATE pads fade out within ~0.5 s of the key release (15 ms ramp + the
+/// expander); 1-SHOT pads play to the end of their sample, which the host
+/// already knows as long as the notes are. It reported 0.
+- (NSTimeInterval)tailTime { return 1.0; }
+
 - (AUInternalRenderBlock)internalRenderBlock {
     __block hdy::HandyEngine *dsp = _dsp.get();
     __block std::atomic<float> *aH=&_hf,*aN=&_nr,*aT=&_tr,*aW=&_wa,*aL=&_lv,*aM=&_mx,*aP=&_pt;
