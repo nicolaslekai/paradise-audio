@@ -1,0 +1,3 @@
+Handy — Paradise Audio
+MP3/AAC sampler with warming chain. 8 sample pads triggered by MIDI C2–G2.
+After install, open Handy.app once, then Logic ▸ AU Instruments ▸ Paradise Audio ▸ Handy.

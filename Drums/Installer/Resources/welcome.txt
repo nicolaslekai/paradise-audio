@@ -1,0 +1,3 @@
+Drums — Paradise Audio
+Procedural 10-voice drum machine. Follows host transport (plays automatically) and responds to MIDI notes 36–45.
+After install, open Drums.app once, then Logic ▸ AU Instruments ▸ Paradise Audio ▸ Drums.

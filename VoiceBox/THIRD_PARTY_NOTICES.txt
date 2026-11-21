@@ -1,0 +1,43 @@
+VoiceBox (Paradise Audio) — third-party notices
+================================================
+MIT and WOL require these notices in all copies of the software, including the
+binary distribution. Show this file in the About box or ship it with the installer.
+
+1) sevagh/pitch-detection — McLeod Pitch Method (ported to Accelerate)
+   VoiceBoxExtension/DSP/third_party/sevagh-mpm/  (see NOTICE.txt there)
+
+   MIT License
+   Copyright (c) 2018 Sevag Hanssian
+
+   Permission is hereby granted, free of charge, to any person obtaining a copy
+   of this software and associated documentation files (the "Software"), to deal
+   in the Software without restriction, including without limitation the rights
+   to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+   copies of the Software, and to permit persons to whom the Software is
+   furnished to do so, subject to the following conditions:
+
+   The above copyright notice and this permission notice shall be included in all
+   copies or substantial portions of the Software.
+
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+   IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+   FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+   AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+   LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+   OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+   SOFTWARE.
+
+2) smbPitchShift (Stephan M. Bernsee) — basis of the STFT fallback shifter
+   VoiceBoxExtension/DSP/PitchShifterHQ.hpp
+
+   COPYRIGHT 1999-2015 Stephan M. Bernsee <s.bernsee [AT] zynaptiq [DOT] com>
+   The Wide Open License (WOL)
+   Permission to use, copy, modify, distribute and sell this software and its
+   documentation for any purpose is hereby granted without fee, provided that
+   the above copyright notice and this license appear in all source copies.
+   THIS SOFTWARE IS PROVIDED "AS IS" WITHOUT EXPRESS OR IMPLIED WARRANTY OF
+   ANY KIND. See http://www.dspguru.com/wol.htm for more information.
+
+The PSOLA engine (Psola.hpp) is in-house (Moulines & Charpentier 1990); its
+structure follows sannawag/TD-PSOLA (MIT, Copyright (c) 2019 Sanna Wager) but
+no code was copied.

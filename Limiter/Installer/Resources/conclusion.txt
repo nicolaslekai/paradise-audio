@@ -1,0 +1,8 @@
+Installation complete.
+
+Open Limiter.app once from /Applications to register the AU with the
+system. Then open Logic Pro and look under AU Effects ▸ Paradise Audio ▸ Limiter.
+
+If Logic doesn't see it: quit Logic, run
+    killall -9 AudioComponentRegistrar
+from Terminal, then re-open Logic.

@@ -1,0 +1,50 @@
+name: PitchKnob
+options:
+  bundleIdPrefix: com.paradise
+  deploymentTarget: { macOS: "12.0" }
+  createIntermediateGroups: true
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    MACOSX_DEPLOYMENT_TARGET: "12.0"
+    ARCHS: "$(ARCHS_STANDARD)"
+    ONLY_ACTIVE_ARCH: NO
+    CLANG_CXX_LANGUAGE_STANDARD: "c++17"
+    CLANG_CXX_LIBRARY: "libc++"
+targets:
+  PitchKnobApp:
+    type: application
+    platform: macOS
+    sources: [{ path: PitchKnobApp }]
+    info:
+      path: PitchKnobApp/Info.plist
+      properties:
+        CFBundleName: PitchKnob
+        CFBundleDisplayName: Pitch Knob
+        CFBundleIdentifier: com.paradise.PitchKnob
+        CFBundleShortVersionString: "1.0.0"
+        CFBundleVersion: "1"
+        LSMinimumSystemVersion: "12.0"
+        NSPrincipalClass: NSApplication
+        NSHighResolutionCapable: true
+    dependencies: [{ target: PitchKnobExtension }]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.paradise.PitchKnob
+        PRODUCT_NAME: PitchKnob
+        INFOPLIST_FILE: PitchKnobApp/Info.plist
+        ENABLE_HARDENED_RUNTIME: YES
+  PitchKnobExtension:
+    type: app-extension
+    platform: macOS
+    sources: [{ path: PitchKnobExtension }]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.paradise.PitchKnob.Extension
+        PRODUCT_NAME: PitchKnobExtension
+        INFOPLIST_FILE: PitchKnobExtension/Info.plist
+        CODE_SIGN_ENTITLEMENTS: PitchKnobExtension/PitchKnobExtension.entitlements
+        SWIFT_OBJC_BRIDGING_HEADER: PitchKnobExtension/PitchKnobExtension-Bridging-Header.h
+        ENABLE_HARDENED_RUNTIME: YES
+        CLANG_ENABLE_OBJC_ARC: YES
+        CLANG_ENABLE_OBJC_WEAK: YES

@@ -1,0 +1,1 @@
+Installation complete. Open Saturation.app once from /Applications to register. If Logic doesn't see it: killall -9 AudioComponentRegistrar

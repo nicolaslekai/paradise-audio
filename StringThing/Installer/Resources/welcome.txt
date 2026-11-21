@@ -1,0 +1,3 @@
+String Thing — Paradise Audio
+Arpeggiator + step sequencer + Berlin-mode phrase player, driving a 2-osc subtractive synth.
+After install, open String Thing.app once, then Logic ▸ AU Instruments ▸ Paradise Audio ▸ String Thing.

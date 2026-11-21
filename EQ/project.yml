@@ -1,0 +1,59 @@
+name: EQ
+options:
+  bundleIdPrefix: com.paradise
+  deploymentTarget:
+    macOS: "12.0"
+  createIntermediateGroups: true
+
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    MACOSX_DEPLOYMENT_TARGET: "12.0"
+    ARCHS: "$(ARCHS_STANDARD)"
+    ONLY_ACTIVE_ARCH: NO
+    CLANG_CXX_LANGUAGE_STANDARD: "c++17"
+    CLANG_CXX_LIBRARY: "libc++"
+
+targets:
+  EQApp:
+    type: application
+    platform: macOS
+    sources:
+      - path: EQApp
+    info:
+      path: EQApp/Info.plist
+      properties:
+        CFBundleName: EQ
+        CFBundleDisplayName: EQ
+        CFBundleIdentifier: com.paradise.EQ
+        CFBundleShortVersionString: "1.0.0"
+        CFBundleVersion: "1"
+        LSMinimumSystemVersion: "12.0"
+        NSPrincipalClass: NSApplication
+        NSHighResolutionCapable: true
+    dependencies:
+      - target: EQExtension
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.paradise.EQ
+        PRODUCT_NAME: EQ
+        INFOPLIST_FILE: EQApp/Info.plist
+        ENABLE_HARDENED_RUNTIME: YES
+
+  EQExtension:
+    type: app-extension
+    platform: macOS
+    sources:
+      - path: EQExtension
+    dependencies:
+      - sdk: Accelerate.framework
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.paradise.EQ.Extension
+        PRODUCT_NAME: EQExtension
+        INFOPLIST_FILE: EQExtension/Info.plist
+        CODE_SIGN_ENTITLEMENTS: EQExtension/EQExtension.entitlements
+        SWIFT_OBJC_BRIDGING_HEADER: EQExtension/EQExtension-Bridging-Header.h
+        ENABLE_HARDENED_RUNTIME: YES
+        CLANG_ENABLE_OBJC_ARC: YES
+        CLANG_ENABLE_OBJC_WEAK: YES

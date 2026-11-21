@@ -1,0 +1,18 @@
+sevagh-mpm — McLeod Pitch Method, ported for VoiceBox (Paradise Audio)
+
+Source:   https://github.com/sevagh/pitch-detection
+Commit:   8055f50bd94ffcc9fec4b63ca9a6a087eec9d892 (master, fetched 2026-11-20)
+Files ported: src/mpm.cpp (peak_picking, Mpm<T>::pitch cutoff logic),
+              src/parabolic_interpolation.cpp, src/autocorrelation.cpp (acorr_r)
+Licence:  MIT — "Copyright (c) 2018 Sevag Hanssian" (full text in LICENSE).
+
+Changes in this port (MpmVdsp.hpp):
+ • FFTS replaced by Apple Accelerate vDSP_fft_zrip; all buffers preallocated in
+   prepare() — no allocation on the audio thread.
+ • The autocorrelation is normalised into the NSDF of McLeod & Wyvill (2005),
+   n'(τ) = 2·r(τ) / m(τ), so the peak height is a 0…1 clarity (voicing confidence).
+ • Lag search limited to a vocal range (min/max Hz); returns clarity alongside f0.
+ • 2026-11-21 (not in the original): optional continuity hint in detect() — stay
+   on the previous period while its NSDF peak is ≥ 0.86 × the highest one, unless
+   the octave below wins by the normal 0.93 rule; leave a subharmonic for T/2 …
+   T/6 by the same rule. Without a hint the function behaves as before.

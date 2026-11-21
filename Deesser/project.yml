@@ -1,0 +1,52 @@
+name: Deesser
+options:
+  bundleIdPrefix: com.paradise
+  deploymentTarget: { macOS: "12.0" }
+  createIntermediateGroups: true
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    MACOSX_DEPLOYMENT_TARGET: "12.0"
+    ARCHS: "$(ARCHS_STANDARD)"
+    ONLY_ACTIVE_ARCH: NO
+    CLANG_CXX_LANGUAGE_STANDARD: "c++17"
+    CLANG_CXX_LIBRARY: "libc++"
+targets:
+  DeesserApp:
+    type: application
+    platform: macOS
+    sources: [{ path: DeesserApp }]
+    info:
+      path: DeesserApp/Info.plist
+      properties:
+        CFBundleName: Deesser
+        CFBundleDisplayName: De-esser
+        CFBundleIdentifier: com.paradise.Deesser
+        CFBundleShortVersionString: "1.0.0"
+        CFBundleVersion: "1"
+        LSMinimumSystemVersion: "12.0"
+        NSPrincipalClass: NSApplication
+        NSHighResolutionCapable: true
+    dependencies: [{ target: DeesserExtension }]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.paradise.Deesser
+        PRODUCT_NAME: Deesser
+        INFOPLIST_FILE: DeesserApp/Info.plist
+        ENABLE_HARDENED_RUNTIME: YES
+  DeesserExtension:
+    type: app-extension
+    platform: macOS
+    sources: [{ path: DeesserExtension }]
+    dependencies:
+      - sdk: Accelerate.framework
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.paradise.Deesser.Extension
+        PRODUCT_NAME: DeesserExtension
+        INFOPLIST_FILE: DeesserExtension/Info.plist
+        CODE_SIGN_ENTITLEMENTS: DeesserExtension/DeesserExtension.entitlements
+        SWIFT_OBJC_BRIDGING_HEADER: DeesserExtension/DeesserExtension-Bridging-Header.h
+        ENABLE_HARDENED_RUNTIME: YES
+        CLANG_ENABLE_OBJC_ARC: YES
+        CLANG_ENABLE_OBJC_WEAK: YES

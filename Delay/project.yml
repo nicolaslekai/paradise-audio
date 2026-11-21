@@ -1,0 +1,50 @@
+name: Delay
+options:
+  bundleIdPrefix: com.paradise
+  deploymentTarget: { macOS: "12.0" }
+  createIntermediateGroups: true
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    MACOSX_DEPLOYMENT_TARGET: "12.0"
+    ARCHS: "$(ARCHS_STANDARD)"
+    ONLY_ACTIVE_ARCH: NO
+    CLANG_CXX_LANGUAGE_STANDARD: "c++17"
+    CLANG_CXX_LIBRARY: "libc++"
+targets:
+  DelayApp:
+    type: application
+    platform: macOS
+    sources: [{ path: DelayApp }]
+    info:
+      path: DelayApp/Info.plist
+      properties:
+        CFBundleName: Delay
+        CFBundleDisplayName: Delay
+        CFBundleIdentifier: com.paradise.Delay
+        CFBundleShortVersionString: "1.0.0"
+        CFBundleVersion: "1"
+        LSMinimumSystemVersion: "12.0"
+        NSPrincipalClass: NSApplication
+        NSHighResolutionCapable: true
+    dependencies: [{ target: DelayExtension }]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.paradise.Delay
+        PRODUCT_NAME: Delay
+        INFOPLIST_FILE: DelayApp/Info.plist
+        ENABLE_HARDENED_RUNTIME: YES
+  DelayExtension:
+    type: app-extension
+    platform: macOS
+    sources: [{ path: DelayExtension }]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.paradise.Delay.Extension
+        PRODUCT_NAME: DelayExtension
+        INFOPLIST_FILE: DelayExtension/Info.plist
+        CODE_SIGN_ENTITLEMENTS: DelayExtension/DelayExtension.entitlements
+        SWIFT_OBJC_BRIDGING_HEADER: DelayExtension/DelayExtension-Bridging-Header.h
+        ENABLE_HARDENED_RUNTIME: YES
+        CLANG_ENABLE_OBJC_ARC: YES
+        CLANG_ENABLE_OBJC_WEAK: YES

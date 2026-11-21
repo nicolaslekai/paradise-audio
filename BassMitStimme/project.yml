@@ -1,0 +1,54 @@
+name: BassMitStimme
+options:
+  bundleIdPrefix: com.paradise
+  deploymentTarget: { macOS: "12.0" }
+  createIntermediateGroups: true
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    MACOSX_DEPLOYMENT_TARGET: "12.0"
+    ARCHS: "$(ARCHS_STANDARD)"
+    ONLY_ACTIVE_ARCH: NO
+    CLANG_CXX_LANGUAGE_STANDARD: "c++17"
+    CLANG_CXX_LIBRARY: "libc++"
+targets:
+  BassMitStimmeApp:
+    type: application
+    platform: macOS
+    sources: [{ path: BassMitStimmeApp }]
+    info:
+      path: BassMitStimmeApp/Info.plist
+      properties:
+        CFBundleName: BassMitStimme
+        CFBundleDisplayName: Bass mit Stimme
+        CFBundleIdentifier: com.paradise.BassMitStimme
+        CFBundleShortVersionString: "1.0.0"
+        CFBundleVersion: "1"
+        LSMinimumSystemVersion: "12.0"
+        NSPrincipalClass: NSApplication
+        NSHighResolutionCapable: true
+    dependencies: [{ target: BassMitStimmeExtension }]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.paradise.BassMitStimme
+        PRODUCT_NAME: BassMitStimme
+        INFOPLIST_FILE: BassMitStimmeApp/Info.plist
+        ENABLE_HARDENED_RUNTIME: YES
+  BassMitStimmeExtension:
+    type: app-extension
+    platform: macOS
+    sources:
+      - path: BassMitStimmeExtension
+        excludes: ["**/*.pre-stretch"]
+    dependencies:
+      - sdk: Accelerate.framework   # Signalsmith Stretch FFTs (vDSP)
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.paradise.BassMitStimme.Extension
+        PRODUCT_NAME: BassMitStimmeExtension
+        INFOPLIST_FILE: BassMitStimmeExtension/Info.plist
+        CODE_SIGN_ENTITLEMENTS: BassMitStimmeExtension/BassMitStimmeExtension.entitlements
+        SWIFT_OBJC_BRIDGING_HEADER: BassMitStimmeExtension/BassMitStimmeExtension-Bridging-Header.h
+        ENABLE_HARDENED_RUNTIME: YES
+        CLANG_ENABLE_OBJC_ARC: YES
+        CLANG_ENABLE_OBJC_WEAK: YES

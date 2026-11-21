@@ -1,0 +1,1 @@
+Installation complete. Open Delay.app once from /Applications. If Logic can't see it: killall -9 AudioComponentRegistrar

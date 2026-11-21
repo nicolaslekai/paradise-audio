@@ -1,0 +1,3 @@
+Reverb — Paradise Audio
+Freeverb-style algorithmic reverb with EQ pre-shaping and pre-delay.
+After install, open Reverb.app once, then Logic ▸ AU Effects ▸ Paradise Audio ▸ Reverb.

@@ -1,0 +1,11 @@
+Welcome to the RoarBass installer.
+
+RoarBass is an AUv3 instrument plug-in for Logic Pro, GarageBand, MainStage,
+and other Audio Unit hosts on macOS.
+
+This installer will place RoarBass.app into /Applications. The Audio Unit
+itself lives inside the app bundle (that's how AUv3 ships on macOS) — once
+the app has been launched at least once, the AU is registered system-wide.
+
+After install, open Logic Pro and add an instrument track. RoarBass will
+appear under AU Instruments ▸ Anthropic ▸ RoarBass.

@@ -1,0 +1,7 @@
+Ultra Reverse — Paradise Audio
+
+A reverse-reverb texture overlay: blooming reversed tails, octave shimmer,
+and long ambient washes layered over your dry signal.
+
+This installer places Ultra Reverse.app in /Applications. The bundled AUv3
+plug-in then appears in Logic Pro under AU Effects ▸ Paradise Audio ▸ Ultra Reverse.

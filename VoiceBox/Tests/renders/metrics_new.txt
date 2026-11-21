@@ -1,0 +1,39 @@
+== VoiceBox bench [new] ==
+METRIC latency_samples 1024
+METRIC T1_low-5_hnr_t002s 40.0 (f 149.8 Hz)
+METRIC T1_low-5_hnr_t030s 39.4 (f 149.8 Hz)
+METRIC T1_low-5_hnr_t180s 40.1 (f 149.8 Hz)
+METRIC T1_autotune_hnr_t002s 44.2 (f 196.0 Hz)
+METRIC T1_autotune_hnr_t030s 43.5 (f 196.0 Hz)
+METRIC T1_autotune_hnr_t180s 44.4 (f 196.0 Hz)
+METRIC T3_wobble_mean_cents 1.2
+METRIC T3_wobble_sd_cents 1.4
+METRIC T3_wobble_range_cents -1.5..4.7
+METRIC T3_note_flips 0
+METRIC F_-5_env_corr 0.999
+METRIC F_-5_resample_ref_corr 0.928
+METRIC F_-5_pitch_err_cents 0.0
+METRIC F_-5_hnr 46.7
+METRIC F_+5_env_corr 0.967
+METRIC F_+5_resample_ref_corr 0.807
+METRIC F_+5_pitch_err_cents 0.0
+METRIC F_+5_hnr 44.6
+METRIC T7_dry_lag 1024 (reported 1024, err +0, 2nd-peak 0.76)
+METRIC T7_autotune_amt0_lag 1024 (reported 1024, err +0, 2nd-peak 0.76)
+METRIC T7_at+low0_lag 1024 (reported 1024, err +0, 2nd-peak 0.76)
+METRIC T7_at+harm0_lag 1024 (reported 1024, err +0, 2nd-peak 0.76)
+METRIC T7_low0_lag 1024 (reported 1024, err +0, 2nd-peak 0.76)
+METRIC T7_harm0_lag 1024 (reported 1024, err +0, 2nd-peak 0.76)
+METRIC T7_clicks_dry_lag 1024 (reported 1024)
+METRIC T7_clicks_autotune_lag 1024 (reported 1024)
+METRIC T6_sss_level_change_db -0.00
+METRIC T6_sss_waveform_corr 1.000
+METRIC T8_autotune_toggle_jump_ratio 0.99 (toggle 0.0148, steady 0.0150)
+METRIC T8_low-5_toggle_jump_ratio 0.96 (toggle 0.0161, steady 0.0168)
+METRIC T8_harm+7_toggle_jump_ratio 0.98 (toggle 0.0179, steady 0.0183)
+METRIC CPU_all_pitch_fx_pct_of_core 0.84
+METRIC CPU_autotune_only_pct_of_core 0.55
+METRIC demo_autotune_fast_median_err_cents 1.0
+METRIC demo_autotune_fast_p90_err_cents 3.6
+METRIC demo_autotune_slow_median_err_cents 14.9
+METRIC demo_autotune_slow_p90_err_cents 42.7

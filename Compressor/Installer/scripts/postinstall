@@ -1,0 +1,15 @@
+#!/bin/bash
+# postinstall — Register Compressor.app with Launch Services so the AU gets
+# picked up without the user needing to manually launch the app.
+
+APP="/Applications/Compressor.app"
+LSREG="/System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/LaunchServices.framework/Versions/A/Support/lsregister"
+
+if [ -x "$LSREG" ] && [ -d "$APP" ]; then
+    "$LSREG" -f "$APP" || true
+fi
+
+# Nudge the AU registrar so Logic re-scans on next open.
+killall -9 AudioComponentRegistrar 2>/dev/null || true
+
+exit 0

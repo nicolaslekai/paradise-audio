@@ -1,0 +1,12 @@
+RoarBass is installed.
+
+Launch RoarBass once from /Applications so macOS registers the Audio Unit,
+then open Logic Pro and pick AU Instruments ▸ Anthropic ▸ RoarBass on any
+instrument track.
+
+If the plug-in doesn't appear, open Terminal and run:
+
+    auval -v aumu Roar Anth
+
+That will print Logic's validation log and tell you what (if anything)
+needs attention.

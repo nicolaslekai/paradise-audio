@@ -1,0 +1,6 @@
+#!/bin/bash
+APP="/Applications/Drums.app"
+LSREG="/System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/LaunchServices.framework/Versions/A/Support/lsregister"
+[ -x "$LSREG" ] && [ -d "$APP" ] && "$LSREG" -f "$APP" || true
+killall -9 AudioComponentRegistrar 2>/dev/null || true
+exit 0

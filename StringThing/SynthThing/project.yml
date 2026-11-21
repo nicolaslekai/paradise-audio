@@ -1,0 +1,51 @@
+name: SynthThing
+options:
+  bundleIdPrefix: com.paradise
+  deploymentTarget: { macOS: "11.0" }
+  createIntermediateGroups: true
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    MACOSX_DEPLOYMENT_TARGET: "11.0"
+    ARCHS: "$(ARCHS_STANDARD)"
+    ONLY_ACTIVE_ARCH: NO
+    CLANG_CXX_LANGUAGE_STANDARD: "c++17"
+    CLANG_CXX_LIBRARY: "libc++"
+targets:
+  SynthThingApp:
+    type: application
+    platform: macOS
+    sources: [{ path: SynthThingApp }]
+    info:
+      path: SynthThingApp/Info.plist
+      properties:
+        CFBundleName: SynthThing
+        CFBundleDisplayName: Synth Thing
+        CFBundleIdentifier: com.paradise.SynthThing
+        CFBundleShortVersionString: "1.0.0"
+        CFBundleVersion: "1"
+        LSMinimumSystemVersion: "11.0"
+        NSPrincipalClass: NSApplication
+        NSHighResolutionCapable: true
+        LSUIElement: true
+    dependencies: [{ target: SynthThingExtension }]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.paradise.SynthThing
+        PRODUCT_NAME: SynthThing
+        INFOPLIST_FILE: SynthThingApp/Info.plist
+        ENABLE_HARDENED_RUNTIME: YES
+  SynthThingExtension:
+    type: app-extension
+    platform: macOS
+    sources: [{ path: SynthThingExtension }]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.paradise.SynthThing.Extension
+        PRODUCT_NAME: SynthThingExtension
+        INFOPLIST_FILE: SynthThingExtension/Info.plist
+        CODE_SIGN_ENTITLEMENTS: SynthThingExtension/SynthThingExtension.entitlements
+        SWIFT_OBJC_BRIDGING_HEADER: SynthThingExtension/SynthThingExtension-Bridging-Header.h
+        ENABLE_HARDENED_RUNTIME: YES
+        CLANG_ENABLE_OBJC_ARC: YES
+        CLANG_ENABLE_OBJC_WEAK: YES

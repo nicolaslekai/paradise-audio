@@ -1,0 +1,69 @@
+# --- build output ---
+build/
+dist/
+DerivedData/
+*.xcodeproj/
+xcuserdata/
+.DS_Store
+
+# --- not source: audio, client material, chat media, renders ---
+/bounces/
+/samples/
+/whatsapp-inbox/
+/video/
+/logic/
+/assets/
+/refs/
+/Resources/
+/Plugin_Renders/
+/*.png
+/*.m4a
+/*.jsx
+/EXECUTION_PLAN.html
+_sound_previews/
+_backup/
+Tools/sound_audit/results/
+Tools/ui_harness/harness.png
+**/Tests/**/out/
+*.wav
+*.aif
+*.aiff
+*.mid
+
+# --- backups made while editing ---
+*.bak
+*.bak.*
+*.autobak
+*.gfxbak
+*.presetbak
+*.previz
+*-prebak
+*.pre-*
+*.pre12
+*.prenames
+*.prelogo
+*.prebugfix
+*.prelongsub
+*.preknobvector
+*.preeqcmp
+*.pre*
+*bak
+*bak.*
+*.snapshot
+.fuse_hidden*
+*.pyc
+__pycache__/
+*.f32
+
+# personal voice recording used as the default Bass mit Stimme sample
+Stimme.m4a
+
+# compiled test binaries
+Tools/sound_audit/bin/
+UltraReverse/tests/bin/
+
+# internal notes and working tools: not part of the public repo
+/HANDOFF.md
+/PROJECT.md
+/Tools/
+/build_changed.sh

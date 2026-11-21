@@ -1,0 +1,3 @@
+Bass mit Stimme — Paradise Audio
+Bass synthesizer with vocal sample layer (sample layer placeholder for v1).
+After install, open BassMitStimme.app once, then Logic ▸ AU Instruments ▸ Paradise Audio ▸ Bass mit Stimme.

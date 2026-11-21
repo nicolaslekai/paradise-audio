@@ -1,0 +1,59 @@
+name: RoarBass
+options:
+  bundleIdPrefix: com.anthropic
+  deploymentTarget:
+    macOS: "12.0"
+  createIntermediateGroups: true
+  developmentLanguage: en
+
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    CLANG_CXX_LANGUAGE_STANDARD: "c++17"
+    CLANG_CXX_LIBRARY: "libc++"
+    GCC_C_LANGUAGE_STANDARD: gnu11
+    MACOSX_DEPLOYMENT_TARGET: "12.0"
+    ARCHS: "$(ARCHS_STANDARD)"          # arm64 + x86_64 universal
+    ONLY_ACTIVE_ARCH: NO
+    ENABLE_HARDENED_RUNTIME: YES
+    CODE_SIGN_STYLE: Automatic
+    DEAD_CODE_STRIPPING: YES
+    CLANG_ENABLE_OBJC_ARC: YES
+
+targets:
+
+  RoarBassApp:
+    type: application
+    platform: macOS
+    sources:
+      - path: RoarBassApp
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.anthropic.RoarBass
+        INFOPLIST_FILE: RoarBassApp/Info.plist
+        LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/../Frameworks"
+        PRODUCT_NAME: RoarBass
+    dependencies:
+      - target: RoarBassExtension
+        embed: true
+        copy: true
+
+  RoarBassExtension:
+    type: app-extension
+    platform: macOS
+    sources:
+      - path: RoarBassExtension
+        excludes:
+          - "Info.plist"
+          - "RoarBassExtension.entitlements"
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.anthropic.RoarBass.AudioUnit
+        INFOPLIST_FILE: RoarBassExtension/Info.plist
+        SWIFT_OBJC_BRIDGING_HEADER: RoarBassExtension/RoarBassExtension-Bridging-Header.h
+        DEFINES_MODULE: YES
+        APPLICATION_EXTENSION_API_ONLY: YES
+        CODE_SIGN_ENTITLEMENTS: RoarBassExtension/RoarBassExtension.entitlements
+        LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/../Frameworks @executable_path/../../../../Frameworks"
+        OTHER_LDFLAGS: "$(inherited) -framework AVFoundation -framework AudioToolbox -framework CoreAudioKit -framework AppKit"
+        PRODUCT_NAME: RoarBassExtension

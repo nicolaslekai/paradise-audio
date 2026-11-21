@@ -1,0 +1,5 @@
+EQ — Paradise Audio
+
+A clean OP-1-styled 4-band parametric EQ AUv3 for Logic Pro and any AU host
+on macOS. After install, open EQ.app once to register, then find it under
+AU Effects ▸ Paradise Audio ▸ EQ.

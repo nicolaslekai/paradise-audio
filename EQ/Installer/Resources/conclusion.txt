@@ -1,0 +1,5 @@
+Installation complete.
+
+Open EQ.app once from /Applications, then find it in Logic at
+AU Effects ▸ Paradise Audio ▸ EQ. If Logic doesn't see it, quit Logic and
+run: killall -9 AudioComponentRegistrar

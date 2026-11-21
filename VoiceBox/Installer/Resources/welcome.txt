@@ -1,0 +1,3 @@
+VoiceBox — Paradise Audio
+Raw analogue-warm vocal effects rack: delay, harmonizer, flanger, warmth, chop, pitch-skip.
+After install, open VoiceBox.app once, then Logic ▸ AU Effects ▸ Paradise Audio ▸ VoiceBox.

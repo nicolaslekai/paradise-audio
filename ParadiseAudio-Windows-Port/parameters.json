@@ -1,0 +1,2408 @@
+{
+ "Compressor": {
+  "type": "effect",
+  "subtype": "Cmp1",
+  "manufacturer": "Para",
+  "empty_tree": false,
+  "params": [
+   {
+    "id": "threshold",
+    "name": "Threshold",
+    "index": 0,
+    "min": -60.0,
+    "max": 0.0,
+    "default": -18.0,
+    "unit": "dB"
+   },
+   {
+    "id": "ratio",
+    "name": "Ratio",
+    "index": 1,
+    "min": 1.0,
+    "max": 20.0,
+    "default": 4.0,
+    "unit": "ratio"
+   },
+   {
+    "id": "attack",
+    "name": "Attack",
+    "index": 2,
+    "min": 0.1,
+    "max": 100.0,
+    "default": 5.0,
+    "unit": "ms"
+   },
+   {
+    "id": "release",
+    "name": "Release",
+    "index": 3,
+    "min": 5.0,
+    "max": 2000.0,
+    "default": 80.0,
+    "unit": "ms"
+   },
+   {
+    "id": "knee",
+    "name": "Knee",
+    "index": 4,
+    "min": 0.0,
+    "max": 24.0,
+    "default": 6.0,
+    "unit": "dB"
+   },
+   {
+    "id": "mix",
+    "name": "Mix",
+    "index": 5,
+    "min": 0.0,
+    "max": 1.0,
+    "default": 1.0,
+    "unit": "gain"
+   },
+   {
+    "id": "duckOn",
+    "name": "Duck",
+    "index": 6,
+    "min": 0.0,
+    "max": 1.0,
+    "default": 0.0,
+    "unit": "bool"
+   },
+   {
+    "id": "duckRate",
+    "name": "Duck Rate",
+    "index": 7,
+    "min": 1.0,
+    "max": 12.0,
+    "default": 3.0,
+    "unit": "indexed"
+   },
+   {
+    "id": "duckDepth",
+    "name": "Duck Depth",
+    "index": 8,
+    "min": 0.0,
+    "max": 36.0,
+    "default": 9.0,
+    "unit": "dB"
+   },
+   {
+    "id": "duckAttack",
+    "name": "Duck Attack",
+    "index": 9,
+    "min": 0.1,
+    "max": 50.0,
+    "default": 3.0,
+    "unit": "ms"
+   }
+  ],
+  "setters": [
+   "setAttackMs",
+   "setKneeDB",
+   "setMix",
+   "setRatio",
+   "setReleaseMs",
+   "setThresholdDB"
+  ],
+  "objc_methods": [
+   "allocateRenderResourcesAndReturnError",
+   "bpmSynced",
+   "buildParameterTree",
+   "currentDuckDB",
+   "currentGainReductionDB",
+   "dealloc",
+   "deallocateRenderResources",
+   "duckBPM",
+   "duckDepthDB",
+   "duckEnabled",
+   "duckPhase",
+   "duckRate",
+   "initWithComponentDescription",
+   "inputBusses",
+   "internalRenderBlock",
+   "outputBusses",
+   "probeSize",
+   "readProbeIn",
+   "readSpectrumIn",
+   "setDuckBPM",
+   "setDuckDepthDB",
+   "setDuckEnabled",
+   "setDuckRate",
+   "triggerDuck"
+  ],
+  "dsp_headers": [
+   "CompressorDSP.hpp",
+   "DSPCommon.hpp",
+   "EnvelopeFollower.hpp"
+  ],
+  "au_source": "CompressorAudioUnit.mm"
+ },
+ "EQ": {
+  "type": "effect",
+  "subtype": "PEq1",
+  "manufacturer": "Para",
+  "empty_tree": false,
+  "params": [
+   {
+    "id": "hp",
+    "name": "HP",
+    "index": 0,
+    "min": 20.0,
+    "max": 1000.0,
+    "default": 40.0,
+    "unit": "Hz"
+   },
+   {
+    "id": "loFreq",
+    "name": "Lo Freq",
+    "index": 1,
+    "min": 40.0,
+    "max": 800.0,
+    "default": 120.0,
+    "unit": "Hz"
+   },
+   {
+    "id": "loGain",
+    "name": "Lo Gain",
+    "index": 2,
+    "min": -18.0,
+    "max": 18.0,
+    "default": 0.0,
+    "unit": "dB"
+   },
+   {
+    "id": "hiFreq",
+    "name": "Hi Freq",
+    "index": 3,
+    "min": 1000.0,
+    "max": 16000.0,
+    "default": 6000.0,
+    "unit": "Hz"
+   },
+   {
+    "id": "hiGain",
+    "name": "Hi Gain",
+    "index": 4,
+    "min": -18.0,
+    "max": 18.0,
+    "default": 0.0,
+    "unit": "dB"
+   },
+   {
+    "id": "lp",
+    "name": "LP",
+    "index": 5,
+    "min": 2000.0,
+    "max": 20000.0,
+    "default": 18000.0,
+    "unit": "Hz"
+   },
+   {
+    "id": "lmFreq",
+    "name": "LM Freq",
+    "index": 6,
+    "min": 200.0,
+    "max": 2000.0,
+    "default": 500.0,
+    "unit": "Hz"
+   },
+   {
+    "id": "lmGain",
+    "name": "LM Gain",
+    "index": 7,
+    "min": -18.0,
+    "max": 18.0,
+    "default": 0.0,
+    "unit": "dB"
+   },
+   {
+    "id": "hmFreq",
+    "name": "HM Freq",
+    "index": 8,
+    "min": 1000.0,
+    "max": 8000.0,
+    "default": 2500.0,
+    "unit": "Hz"
+   },
+   {
+    "id": "hmGain",
+    "name": "HM Gain",
+    "index": 9,
+    "min": -18.0,
+    "max": 18.0,
+    "default": 0.0,
+    "unit": "dB"
+   },
+   {
+    "id": "loQ",
+    "name": "Lo Q",
+    "index": 10,
+    "min": 0.2,
+    "max": 8.0,
+    "default": 0.9,
+    "unit": ""
+   },
+   {
+    "id": "lmQ",
+    "name": "LM Q",
+    "index": 11,
+    "min": 0.2,
+    "max": 8.0,
+    "default": 1.2,
+    "unit": ""
+   },
+   {
+    "id": "hmQ",
+    "name": "HM Q",
+    "index": 12,
+    "min": 0.2,
+    "max": 8.0,
+    "default": 1.2,
+    "unit": ""
+   },
+   {
+    "id": "hiQ",
+    "name": "Hi Q",
+    "index": 13,
+    "min": 0.2,
+    "max": 8.0,
+    "default": 0.9,
+    "unit": ""
+   },
+   {
+    "id": "hpSlope",
+    "name": "HP Slope",
+    "index": 14,
+    "min": 0.0,
+    "max": 1.0,
+    "default": 0.0,
+    "unit": "indexed"
+   },
+   {
+    "id": "lpSlope",
+    "name": "LP Slope",
+    "index": 15,
+    "min": 0.0,
+    "max": 1.0,
+    "default": 0.0,
+    "unit": "indexed"
+   }
+  ],
+  "setters": [
+   "setHPFreq",
+   "setHPSlope24",
+   "setHighFreq",
+   "setHighGainDB",
+   "setHighIsBell",
+   "setHighMidFreq",
+   "setHighMidGainDB",
+   "setHighMidQ",
+   "setHighQ",
+   "setLPFreq",
+   "setLPSlope24",
+   "setLowFreq",
+   "setLowGainDB",
+   "setLowIsBell",
+   "setLowMidFreq",
+   "setLowMidGainDB",
+   "setLowMidQ",
+   "setLowQ"
+  ],
+  "objc_methods": [
+   "allocateRenderResourcesAndReturnError",
+   "buildParameterTree",
+   "dealloc",
+   "deallocateRenderResources",
+   "highIsBell",
+   "initWithComponentDescription",
+   "inputBusses",
+   "internalRenderBlock",
+   "lowIsBell",
+   "magnitudeDBAtFrequency",
+   "outputBusses",
+   "readSpectrumBands",
+   "setHighIsBell",
+   "setLowIsBell"
+  ],
+  "dsp_headers": [
+   "Biquad.hpp",
+   "DSPCommon.hpp",
+   "EQEngine.hpp"
+  ],
+  "au_source": "EQAudioUnit.mm"
+ },
+ "Reverb": {
+  "type": "effect",
+  "subtype": "Rvb1",
+  "manufacturer": "Para",
+  "empty_tree": false,
+  "params": [
+   {
+    "id": "size",
+    "name": "Size",
+    "index": 0,
+    "min": 0.0,
+    "max": 1.0,
+    "default": 0.65,
+    "unit": "gain"
+   },
+   {
+    "id": "decay",
+    "name": "Decay",
+    "index": 1,
+    "min": 0.5,
+    "max": 8.0,
+    "default": 2.1,
+    "unit": "s"
+   },
+   {
+    "id": "damping",
+    "name": "Damping",
+    "index": 2,
+    "min": 0.0,
+    "max": 1.0,
+    "default": 0.4,
+    "unit": "gain"
+   },
+   {
+    "id": "predelay",
+    "name": "Predelay",
+    "index": 3,
+    "min": 0.0,
+    "max": 200.0,
+    "default": 12.0,
+    "unit": "ms"
+   },
+   {
+    "id": "loCut",
+    "name": "EQ Lo",
+    "index": 4,
+    "min": 20.0,
+    "max": 1000.0,
+    "default": 80.0,
+    "unit": "Hz"
+   },
+   {
+    "id": "hiCut",
+    "name": "EQ Hi",
+    "index": 5,
+    "min": 1000.0,
+    "max": 18000.0,
+    "default": 9000.0,
+    "unit": "Hz"
+   },
+   {
+    "id": "mix",
+    "name": "Mix",
+    "index": 6,
+    "min": 0.0,
+    "max": 1.0,
+    "default": 0.35,
+    "unit": "gain"
+   }
+  ],
+  "setters": [
+   "setDamping",
+   "setDecaySec",
+   "setHiCut",
+   "setLoCut",
+   "setMix",
+   "setPredelayMs",
+   "setSize"
+  ],
+  "objc_methods": [
+   "allocateRenderResourcesAndReturnError",
+   "build",
+   "deallocateRenderResources",
+   "initWithComponentDescription",
+   "inputBusses",
+   "internalRenderBlock",
+   "outputBusses"
+  ],
+  "dsp_headers": [
+   "Freeverb.hpp"
+  ],
+  "au_source": "ReverbAudioUnit.mm"
+ },
+ "Saturation": {
+  "type": "effect",
+  "subtype": "Sat1",
+  "manufacturer": "Para",
+  "empty_tree": false,
+  "params": [
+   {
+    "id": "drive",
+    "name": "Drive",
+    "index": 0,
+    "min": -12.0,
+    "max": 24.0,
+    "default": 8.0,
+    "unit": "dB"
+   },
+   {
+    "id": "bias",
+    "name": "Bias",
+    "index": 1,
+    "min": -1.0,
+    "max": 1.0,
+    "default": 0.15,
+    "unit": "gain"
+   },
+   {
+    "id": "tone",
+    "name": "Tone",
+    "index": 2,
+    "min": -1.0,
+    "max": 1.0,
+    "default": 0.0,
+    "unit": "gain"
+   },
+   {
+    "id": "mix",
+    "name": "Mix",
+    "index": 3,
+    "min": 0.0,
+    "max": 1.0,
+    "default": 1.0,
+    "unit": "gain"
+   },
+   {
+    "id": "out",
+    "name": "Output",
+    "index": 4,
+    "min": -12.0,
+    "max": 12.0,
+    "default": -2.0,
+    "unit": "dB"
+   }
+  ],
+  "setters": [
+   "setBias",
+   "setDriveDB",
+   "setMix",
+   "setOutputDB",
+   "setTone"
+  ],
+  "objc_methods": [
+   "allocateRenderResourcesAndReturnError",
+   "build",
+   "currentLevel",
+   "deallocateRenderResources",
+   "initWithComponentDescription",
+   "inputBusses",
+   "internalRenderBlock",
+   "outputBusses",
+   "transferAt"
+  ],
+  "dsp_headers": [
+   "DSPCommon.hpp",
+   "SaturationDSP.hpp"
+  ],
+  "au_source": "SaturationAudioUnit.mm"
+ },
+ "Deesser": {
+  "type": "effect",
+  "subtype": "Dsr1",
+  "manufacturer": "Para",
+  "empty_tree": false,
+  "params": [
+   {
+    "id": "freq",
+    "name": "Frequency",
+    "index": 0,
+    "min": 1000.0,
+    "max": 12000.0,
+    "default": 6500.0,
+    "unit": "Hz"
+   },
+   {
+    "id": "threshold",
+    "name": "Threshold",
+    "index": 1,
+    "min": -60.0,
+    "max": 0.0,
+    "default": -32.0,
+    "unit": "dB"
+   },
+   {
+    "id": "range",
+    "name": "Range",
+    "index": 2,
+    "min": -36.0,
+    "max": 0.0,
+    "default": -18.0,
+    "unit": "dB"
+   },
+   {
+    "id": "release",
+    "name": "Release",
+    "index": 3,
+    "min": 10.0,
+    "max": 500.0,
+    "default": 80.0,
+    "unit": "ms"
+   },
+   {
+    "id": "listen",
+    "name": "Listen",
+    "index": 4,
+    "min": 0.0,
+    "max": 1.0,
+    "default": 0.0,
+    "unit": "bool"
+   }
+  ],
+  "setters": [
+   "setFrequency",
+   "setListen",
+   "setRangeDB",
+   "setReleaseMs",
+   "setThresholdDB"
+  ],
+  "objc_methods": [
+   "allocateRenderResourcesAndReturnError",
+   "build",
+   "currentGainReductionDB",
+   "dealloc",
+   "deallocateRenderResources",
+   "initWithComponentDescription",
+   "inputBusses",
+   "internalRenderBlock",
+   "outputBusses",
+   "readSpectrumBands"
+  ],
+  "dsp_headers": [
+   "DSPCommon.hpp",
+   "DeesserDSP.hpp"
+  ],
+  "au_source": "DeesserAudioUnit.mm"
+ },
+ "Delay": {
+  "type": "effect",
+  "subtype": "Dly1",
+  "manufacturer": "Para",
+  "empty_tree": false,
+  "params": [
+   {
+    "id": "timeL",
+    "name": "Time L",
+    "index": 0,
+    "min": 1.0,
+    "max": 2000.0,
+    "default": 250.0,
+    "unit": "ms"
+   },
+   {
+    "id": "timeR",
+    "name": "Time R",
+    "index": 1,
+    "min": 1.0,
+    "max": 2000.0,
+    "default": 375.0,
+    "unit": "ms"
+   },
+   {
+    "id": "feedback",
+    "name": "Feedback",
+    "index": 2,
+    "min": 0.0,
+    "max": 0.95,
+    "default": 0.42,
+    "unit": "gain"
+   },
+   {
+    "id": "filter",
+    "name": "Filter",
+    "index": 3,
+    "min": 200.0,
+    "max": 18000.0,
+    "default": 3200.0,
+    "unit": "Hz"
+   },
+   {
+    "id": "mix",
+    "name": "Mix",
+    "index": 4,
+    "min": 0.0,
+    "max": 1.0,
+    "default": 0.28,
+    "unit": "gain"
+   },
+   {
+    "id": "pingpong",
+    "name": "Ping-Pong",
+    "index": 5,
+    "min": 0.0,
+    "max": 1.0,
+    "default": 1.0,
+    "unit": "bool"
+   },
+   {
+    "id": "bass",
+    "name": "Bass Cut",
+    "index": 6,
+    "min": 20.0,
+    "max": 1200.0,
+    "default": 120.0,
+    "unit": "Hz"
+   },
+   {
+    "id": "wobble",
+    "name": "Wobble",
+    "index": 7,
+    "min": 0.0,
+    "max": 1.0,
+    "default": 0.0,
+    "unit": "gain"
+   },
+   {
+    "id": "wobrate",
+    "name": "Wob Rate",
+    "index": 8,
+    "min": 0.02,
+    "max": 12.0,
+    "default": 1.0,
+    "unit": "Hz"
+   },
+   {
+    "id": "warmth",
+    "name": "Warmth",
+    "index": 9,
+    "min": 0.0,
+    "max": 1.0,
+    "default": 0.35,
+    "unit": "gain"
+   }
+  ],
+  "setters": [
+   "setBass",
+   "setFeedback",
+   "setFilterFreq",
+   "setMix",
+   "setPingPong",
+   "setTimes",
+   "setWarmth",
+   "setWobble",
+   "setWobbleRate"
+  ],
+  "objc_methods": [
+   "allocateRenderResourcesAndReturnError",
+   "build",
+   "deallocateRenderResources",
+   "initWithComponentDescription",
+   "inputBusses",
+   "internalRenderBlock",
+   "outputBusses"
+  ],
+  "dsp_headers": [
+   "DSPCommon.hpp",
+   "DelayLine.hpp"
+  ],
+  "au_source": "DelayAudioUnit.mm"
+ },
+ "Drums": {
+  "type": "instrument",
+  "subtype": "Drm1",
+  "manufacturer": "Para",
+  "empty_tree": false,
+  "params": [
+   {
+    "id": "gain",
+    "name": "Gain",
+    "index": 0,
+    "min": -24.0,
+    "max": 12.0,
+    "default": 0.0,
+    "unit": "dB"
+   }
+  ],
+  "setters": [
+   "setBPM",
+   "setBars",
+   "setChain",
+   "setCharacter",
+   "setDecayForVoice",
+   "setDelayMs",
+   "setFilterNorm",
+   "setGlobalDecay",
+   "setGlobalNoise",
+   "setGlobalPitchSemi",
+   "setHostBeatPosition",
+   "setLevel",
+   "setMute",
+   "setPitchSemi",
+   "setPlaying",
+   "setRecordArmed",
+   "setResolution",
+   "setReverbSend",
+   "setSlot",
+   "setSolo",
+   "setStep",
+   "setStepSwing",
+   "setSwing",
+   "setVelocityPresetForVoice"
+  ],
+  "objc_methods": [
+   "allocateRenderResourcesAndReturnError",
+   "bars",
+   "chainPosition",
+   "characterCountForVoice",
+   "characterForVoice",
+   "characterNameForVoice",
+   "clearAllSteps",
+   "clearChain",
+   "clearStepsForVoice",
+   "currentStep",
+   "deallocateRenderResources",
+   "decayForVoice",
+   "delayMsForVoice",
+   "filterNormForVoice",
+   "globalDecay",
+   "globalNoise",
+   "globalPitchSemi",
+   "initWithComponentDescription",
+   "internalRenderBlock",
+   "isMutedForVoice",
+   "isSoloedForVoice",
+   "levelForVoice",
+   "loadStateData",
+   "outputBusses",
+   "patternSlot",
+   "pitchSemiForVoice",
+   "previewVelocityForVoice",
+   "recordArmed",
+   "resolutionForVoice",
+   "reverbSendForVoice",
+   "setBars",
+   "setBpm",
+   "setChainSlots",
+   "setCharacterForVoice",
+   "setDecayForVoice",
+   "setDelayMsForVoice",
+   "setFilterNormForVoice",
+   "setFullState",
+   "setGlobalDecay",
+   "setGlobalNoise",
+   "setGlobalPitchSemi",
+   "setLevelForVoice",
+   "setMutedForVoice",
+   "setPatternSlot",
+   "setPitchSemiForVoice",
+   "setPlaying",
+   "setRecordArmed",
+   "setResolutionForVoice",
+   "setReverbSendForVoice",
+   "setSoloedForVoice",
+   "setStepForVoice",
+   "setSwing",
+   "setSwingLevelForVoice",
+   "setVelocityPresetForVoice",
+   "stateData",
+   "stepForVoice",
+   "swingLevelForVoice",
+   "triggerVoice",
+   "velocityPresetCount",
+   "velocityPresetForVoice",
+   "velocityPresetName"
+  ],
+  "dsp_headers": [
+   "DSPCommon.hpp",
+   "DrumVoices.hpp",
+   "DrumsEngine.hpp"
+  ],
+  "au_source": "DrumsAudioUnit.mm"
+ },
+ "BassMitStimme": {
+  "type": "instrument",
+  "subtype": "Bms1",
+  "manufacturer": "Para",
+  "empty_tree": false,
+  "params": [
+   {
+    "id": "oct",
+    "name": "OSC Oct",
+    "index": 0,
+    "min": -2.0,
+    "max": 2.0,
+    "default": 0.0,
+    "unit": ""
+   },
+   {
+    "id": "det",
+    "name": "Detune",
+    "index": 1,
+    "min": -50.0,
+    "max": 50.0,
+    "default": 6.0,
+    "unit": ""
+   },
+   {
+    "id": "sub",
+    "name": "Sub",
+    "index": 2,
+    "min": 0.0,
+    "max": 1.0,
+    "default": 0.7,
+    "unit": ""
+   },
+   {
+    "id": "fmA",
+    "name": "FM Growl",
+    "index": 3,
+    "min": 0.0,
+    "max": 1.0,
+    "default": 0.0,
+    "unit": ""
+   },
+   {
+    "id": "fmR",
+    "name": "FM Ratio",
+    "index": 4,
+    "min": 0.25,
+    "max": 8.0,
+    "default": 1.5,
+    "unit": ""
+   },
+   {
+    "id": "noi",
+    "name": "Noise",
+    "index": 5,
+    "min": 0.0,
+    "max": 1.0,
+    "default": 0.0,
+    "unit": ""
+   },
+   {
+    "id": "cut",
+    "name": "Cutoff",
+    "index": 6,
+    "min": 20.0,
+    "max": 18000.0,
+    "default": 600.0,
+    "unit": ""
+   },
+   {
+    "id": "res",
+    "name": "Reso",
+    "index": 7,
+    "min": 0.0,
+    "max": 1.0,
+    "default": 0.25,
+    "unit": ""
+   },
+   {
+    "id": "env",
+    "name": "Env Amt",
+    "index": 8,
+    "min": -1.0,
+    "max": 1.0,
+    "default": 0.4,
+    "unit": ""
+   },
+   {
+    "id": "aA",
+    "name": "Amp A",
+    "index": 9,
+    "min": 0.001,
+    "max": 4.0,
+    "default": 0.005,
+    "unit": ""
+   },
+   {
+    "id": "aD",
+    "name": "Amp D",
+    "index": 10,
+    "min": 0.001,
+    "max": 4.0,
+    "default": 0.18,
+    "unit": ""
+   },
+   {
+    "id": "aS",
+    "name": "Amp S",
+    "index": 11,
+    "min": 0.0,
+    "max": 1.0,
+    "default": 0.7,
+    "unit": ""
+   },
+   {
+    "id": "aR",
+    "name": "Amp R",
+    "index": 12,
+    "min": 0.001,
+    "max": 4.0,
+    "default": 0.32,
+    "unit": ""
+   },
+   {
+    "id": "fA",
+    "name": "Filt A",
+    "index": 13,
+    "min": 0.001,
+    "max": 4.0,
+    "default": 0.002,
+    "unit": ""
+   },
+   {
+    "id": "fD",
+    "name": "Filt D",
+    "index": 14,
+    "min": 0.001,
+    "max": 4.0,
+    "default": 0.2,
+    "unit": ""
+   },
+   {
+    "id": "fS",
+    "name": "Filt S",
+    "index": 15,
+    "min": 0.0,
+    "max": 1.0,
+    "default": 0.5,
+    "unit": ""
+   },
+   {
+    "id": "fR",
+    "name": "Filt R",
+    "index": 16,
+    "min": 0.001,
+    "max": 4.0,
+    "default": 0.4,
+    "unit": ""
+   },
+   {
+    "id": "gain",
+    "name": "Gain",
+    "index": 17,
+    "min": 0.0,
+    "max": 2.0,
+    "default": 1.0,
+    "unit": ""
+   },
+   {
+    "id": "glide",
+    "name": "Glide",
+    "index": 18,
+    "min": 0.0,
+    "max": 1000.0,
+    "default": 45.0,
+    "unit": ""
+   },
+   {
+    "id": "mode",
+    "name": "Mode",
+    "index": 19,
+    "min": 0.0,
+    "max": 2.0,
+    "default": 1.0,
+    "unit": ""
+   },
+   {
+    "id": "stmOn",
+    "name": "Stimme",
+    "index": 20,
+    "min": 0.0,
+    "max": 1.0,
+    "default": 1.0,
+    "unit": ""
+   },
+   {
+    "id": "stmPitch",
+    "name": "Pitch",
+    "index": 21,
+    "min": -24.0,
+    "max": 24.0,
+    "default": 0.0,
+    "unit": ""
+   },
+   {
+    "id": "stmMix",
+    "name": "Mix",
+    "index": 22,
+    "min": 0.0,
+    "max": 1.0,
+    "default": 0.55,
+    "unit": ""
+   },
+   {
+    "id": "stmFollow",
+    "name": "Follow",
+    "index": 23,
+    "min": 0.0,
+    "max": 1.0,
+    "default": 1.0,
+    "unit": ""
+   },
+   {
+    "id": "stmMode",
+    "name": "Mode",
+    "index": 24,
+    "min": 0.0,
+    "max": 2.0,
+    "default": 2.0,
+    "unit": ""
+   },
+   {
+    "id": "stmDrive",
+    "name": "Drive",
+    "index": 25,
+    "min": 0.0,
+    "max": 1.0,
+    "default": 0.0,
+    "unit": ""
+   },
+   {
+    "id": "stmTone",
+    "name": "Tone",
+    "index": 26,
+    "min": 0.0,
+    "max": 1.0,
+    "default": 0.5,
+    "unit": ""
+   },
+   {
+    "id": "stmAir",
+    "name": "Air",
+    "index": 27,
+    "min": 0.0,
+    "max": 1.0,
+    "default": 0.0,
+    "unit": ""
+   },
+   {
+    "id": "stmShimmer",
+    "name": "Shimmer",
+    "index": 28,
+    "min": 0.0,
+    "max": 1.0,
+    "default": 0.0,
+    "unit": ""
+   },
+   {
+    "id": "stmReverb",
+    "name": "Reverb",
+    "index": 29,
+    "min": 0.0,
+    "max": 1.0,
+    "default": 0.0,
+    "unit": ""
+   },
+   {
+    "id": "stmDist",
+    "name": "Distortion",
+    "index": 30,
+    "min": 0.0,
+    "max": 1.0,
+    "default": 0.0,
+    "unit": ""
+   }
+  ],
+  "setters": [
+   "setAmpADSR",
+   "setCharacter",
+   "setDetune",
+   "setFM",
+   "setFilter",
+   "setFltADSR",
+   "setGain",
+   "setGlideMs",
+   "setMode",
+   "setNoise",
+   "setOct",
+   "setSub"
+  ],
+  "objc_methods": [
+   "allocateRenderResourcesAndReturnError",
+   "analogCharacter",
+   "build",
+   "deallocateRenderResources",
+   "hostBPM",
+   "hostBeatPosition",
+   "hostIsPlaying",
+   "initWithComponentDescription",
+   "internalRenderBlock",
+   "loadBundledStimme",
+   "outputBusses",
+   "pInt",
+   "playNote",
+   "probeSize",
+   "readProbeBass",
+   "setAnalogCharacter",
+   "setStimmeSampleData",
+   "stimmePlayhead",
+   "stimmeSampleData",
+   "stimmeSampleLength",
+   "stopNote"
+  ],
+  "dsp_headers": [
+   "BMSDSP.hpp"
+  ],
+  "au_source": "BMSAudioUnit.mm"
+ },
+ "Handy": {
+  "type": "instrument",
+  "subtype": "Hnd1",
+  "manufacturer": "Para",
+  "empty_tree": false,
+  "params": [
+   {
+    "id": "hf",
+    "name": "HF Restore",
+    "index": 0,
+    "min": 0.0,
+    "max": 1.0,
+    "default": 0.65,
+    "unit": "gain"
+   },
+   {
+    "id": "nr",
+    "name": "Noise Rdx",
+    "index": 1,
+    "min": -40.0,
+    "max": 0.0,
+    "default": -18.0,
+    "unit": "dB"
+   },
+   {
+    "id": "tr",
+    "name": "Transient",
+    "index": 2,
+    "min": -1.0,
+    "max": 1.0,
+    "default": 0.3,
+    "unit": "gain"
+   },
+   {
+    "id": "wa",
+    "name": "Warmth",
+    "index": 3,
+    "min": 0.0,
+    "max": 1.0,
+    "default": 0.4,
+    "unit": "gain"
+   },
+   {
+    "id": "lv",
+    "name": "Level",
+    "index": 4,
+    "min": -24.0,
+    "max": 12.0,
+    "default": 0.0,
+    "unit": "dB"
+   },
+   {
+    "id": "mx",
+    "name": "Mix",
+    "index": 5,
+    "min": 0.0,
+    "max": 1.0,
+    "default": 1.0,
+    "unit": "gain"
+   },
+   {
+    "id": "pt",
+    "name": "Pitch",
+    "index": 6,
+    "min": -24.0,
+    "max": 24.0,
+    "default": 0.0,
+    "unit": ""
+   }
+  ],
+  "setters": [
+   "setChop",
+   "setHF",
+   "setKeyTrigger",
+   "setLevelDB",
+   "setMix",
+   "setNoiseDB",
+   "setPitchSemi",
+   "setRange",
+   "setRootNote",
+   "setSample",
+   "setTransient",
+   "setTranspose",
+   "setWarmth"
+  ],
+  "objc_methods": [
+   "allocateRenderResourcesAndReturnError",
+   "bounceArmed",
+   "bounceFrameCount",
+   "bounceSampleRate",
+   "build",
+   "chopForPad",
+   "clearPad",
+   "copyBounceInterleaved",
+   "deallocateRenderResources",
+   "freeBounce",
+   "initWithComponentDescription",
+   "internalRenderBlock",
+   "keyTriggerForPad",
+   "nameForPad",
+   "outputBusses",
+   "padCount",
+   "pitchSemiForPad",
+   "pitchTranspose",
+   "probeSize",
+   "rangeEndForPad",
+   "rangeStartForPad",
+   "readProbe",
+   "rootNoteForPad",
+   "setBounceArmed",
+   "setChopForPad",
+   "setFullState",
+   "setKeyTriggerForPad",
+   "setPitchSemiForPad",
+   "setPitchTranspose",
+   "setRangeForPad",
+   "setRootNoteForPad",
+   "setSamplePad",
+   "triggerPad",
+   "zoneCount"
+  ],
+  "dsp_headers": [
+   "CaptureWav.hpp",
+   "DSPCommon.hpp",
+   "HandyEngine.hpp"
+  ],
+  "au_source": "HandyAudioUnit.mm"
+ },
+ "BigKnob": {
+  "type": "effect",
+  "subtype": "Bgk1",
+  "manufacturer": "Para",
+  "empty_tree": false,
+  "params": [
+   {
+    "id": "knob",
+    "name": "Big Knob",
+    "index": 0,
+    "min": 0.0,
+    "max": 1.0,
+    "default": 0.5,
+    "unit": "gain"
+   },
+   {
+    "id": "dist",
+    "name": "Distortion",
+    "index": 1,
+    "min": 0.0,
+    "max": 1.0,
+    "default": 0.0,
+    "unit": "gain"
+   }
+  ],
+  "setters": [
+   "setDist",
+   "setKnob"
+  ],
+  "objc_methods": [
+   "allocateRenderResourcesAndReturnError",
+   "deallocateRenderResources",
+   "initWithComponentDescription",
+   "inputBusses",
+   "internalRenderBlock",
+   "outputBusses"
+  ],
+  "dsp_headers": [
+   "BigKnobDSP.hpp"
+  ],
+  "au_source": "BigKnobAudioUnit.mm"
+ },
+ "SynthThing": {
+  "type": "instrument",
+  "subtype": "Snt1",
+  "manufacturer": "Para",
+  "empty_tree": true,
+  "params": [],
+  "setters": [
+   "setBPM",
+   "setCell",
+   "setChain",
+   "setChop",
+   "setChopType",
+   "setColSwing",
+   "setDelay",
+   "setDelayType",
+   "setDirection",
+   "setDirt",
+   "setDroneInterval",
+   "setDroneLevel",
+   "setDroneOctave",
+   "setDroneOn",
+   "setDubstepStep",
+   "setEnvAmp",
+   "setEnvFlt",
+   "setFilter",
+   "setGate",
+   "setGridOctave",
+   "setGridSteps",
+   "setHalfTone",
+   "setHostBeatPosition",
+   "setLevel",
+   "setMix",
+   "setMod",
+   "setMode",
+   "setNoise",
+   "setOctaveRange",
+   "setPlaying",
+   "setRate",
+   "setRecordArmed",
+   "setReverb",
+   "setReverbType",
+   "setRootKey",
+   "setScale",
+   "setSlot",
+   "setStep",
+   "setSwing",
+   "setVoiceMode"
+  ],
+  "objc_methods": [
+   "allocateRenderResourcesAndReturnError",
+   "ampA",
+   "ampD",
+   "ampR",
+   "ampS",
+   "amplitudeEnv",
+   "bpmSynced",
+   "cellAtRow",
+   "chainPosition",
+   "chop",
+   "chopType",
+   "chordCount",
+   "chordNoteAt",
+   "clearChain",
+   "clearGrid",
+   "colSwing",
+   "copyPatternToSlot",
+   "currentSlot",
+   "currentStep",
+   "cutoffHz",
+   "deallocateRenderResources",
+   "delayFx",
+   "delayType",
+   "direction",
+   "dirt",
+   "droneInterval",
+   "droneLevel",
+   "droneOctave",
+   "droneOn",
+   "dubstepDivisionCount",
+   "dubstepDivisionName",
+   "dubstepPatternLen",
+   "dubstepStep",
+   "filterEnvAmount",
+   "fltA",
+   "fltD",
+   "fltR",
+   "fltS",
+   "gate",
+   "gridOctave",
+   "gridRowMidi",
+   "gridSteps",
+   "halfTone",
+   "initWithComponentDescription",
+   "internalRenderBlock",
+   "level",
+   "loadPhrase",
+   "loadStateData",
+   "mixSaw",
+   "mixSquare",
+   "mixSub",
+   "mod",
+   "mode",
+   "noise",
+   "numGridRows",
+   "octaveRange",
+   "outputBusses",
+   "pushAmpEnv",
+   "pushFilter",
+   "pushFltEnv",
+   "pushMix",
+   "rate",
+   "readNoteHistory",
+   "recordArmed",
+   "resonance",
+   "reverbFx",
+   "reverbType",
+   "rootKey",
+   "scaleId",
+   "setAmpA",
+   "setAmpD",
+   "setAmpR",
+   "setAmpS",
+   "setBpm",
+   "setCellAtRow",
+   "setChainSlots",
+   "setChop",
+   "setChopType",
+   "setColSwing",
+   "setCurrentSlot",
+   "setCutoffHz",
+   "setDelayFx",
+   "setDelayType",
+   "setDirection",
+   "setDirt",
+   "setDroneInterval",
+   "setDroneLevel",
+   "setDroneOctave",
+   "setDroneOn",
+   "setDubstepStep",
+   "setFilterEnvAmount",
+   "setFltA",
+   "setFltD",
+   "setFltR",
+   "setFltS",
+   "setFullState",
+   "setGate",
+   "setGridOctave",
+   "setGridSteps",
+   "setHalfTone",
+   "setLevel",
+   "setMixSaw",
+   "setMixSquare",
+   "setMixSub",
+   "setMod",
+   "setMode",
+   "setNoise",
+   "setOctaveRange",
+   "setPlaying",
+   "setRate",
+   "setRecordArmed",
+   "setResonance",
+   "setReverbFx",
+   "setReverbType",
+   "setRootKey",
+   "setScaleId",
+   "setStep",
+   "setSwing",
+   "setTone",
+   "setVoiceMode",
+   "stateData",
+   "stepOct",
+   "stepOn",
+   "stepSemi",
+   "swing",
+   "tone",
+   "voiceMode"
+  ],
+  "dsp_headers": [
+   "SynthThingEngine.hpp"
+  ],
+  "au_source": "SynthThingAudioUnit.mm"
+ },
+ "Limiter": {
+  "type": "effect",
+  "subtype": "Lim1",
+  "manufacturer": "Para",
+  "empty_tree": false,
+  "params": [
+   {
+    "id": "inputGain",
+    "name": "Input Gain",
+    "index": 0,
+    "min": -12.0,
+    "max": 24.0,
+    "default": 0.0,
+    "unit": "dB"
+   },
+   {
+    "id": "ceiling",
+    "name": "Ceiling",
+    "index": 1,
+    "min": -12.0,
+    "max": 0.0,
+    "default": -1.0,
+    "unit": "dB"
+   },
+   {
+    "id": "release",
+    "name": "Release",
+    "index": 2,
+    "min": 1.0,
+    "max": 1000.0,
+    "default": 80.0,
+    "unit": "ms"
+   }
+  ],
+  "setters": [
+   "setCeilingDB",
+   "setInputGainDB",
+   "setReleaseMs"
+  ],
+  "objc_methods": [
+   "allocateRenderResourcesAndReturnError",
+   "applyLoudnessPreset",
+   "buildParameterTree",
+   "currentGainReductionDB",
+   "currentInputPeakDB",
+   "dealloc",
+   "deallocateRenderResources",
+   "initWithComponentDescription",
+   "inputBusses",
+   "integratedLUFS",
+   "internalRenderBlock",
+   "outputBusses",
+   "readSpectrumBands",
+   "readWaveformInto",
+   "resetIntegrated",
+   "shortTermLUFS"
+  ],
+  "dsp_headers": [
+   "Limiter.hpp",
+   "Loudness.hpp"
+  ],
+  "au_source": "LimiterAudioUnit.mm"
+ },
+ "VoiceBox": {
+  "type": "effect",
+  "subtype": "Vbx1",
+  "manufacturer": "Para",
+  "empty_tree": false,
+  "params": [
+   {
+    "id": "atOn",
+    "name": "Tune On",
+    "index": 0,
+    "min": 0.0,
+    "max": 1.0,
+    "default": 0.0,
+    "unit": ""
+   },
+   {
+    "id": "atSpeed",
+    "name": "Retune Spd",
+    "index": 1,
+    "min": 0.0,
+    "max": 1.0,
+    "default": 0.3,
+    "unit": ""
+   },
+   {
+    "id": "atAmt",
+    "name": "Tune Amount",
+    "index": 2,
+    "min": 0.0,
+    "max": 1.0,
+    "default": 1.0,
+    "unit": ""
+   },
+   {
+    "id": "hmOn",
+    "name": "Harm On",
+    "index": 3,
+    "min": 0.0,
+    "max": 1.0,
+    "default": 0.0,
+    "unit": ""
+   },
+   {
+    "id": "hmSemi",
+    "name": "Harm Semis",
+    "index": 4,
+    "min": -24.0,
+    "max": 24.0,
+    "default": 7.0,
+    "unit": ""
+   },
+   {
+    "id": "hmMix",
+    "name": "Harm Mix",
+    "index": 5,
+    "min": 0.0,
+    "max": 1.0,
+    "default": 0.4,
+    "unit": ""
+   },
+   {
+    "id": "skOn",
+    "name": "Skip On",
+    "index": 6,
+    "min": 0.0,
+    "max": 1.0,
+    "default": 0.0,
+    "unit": ""
+   },
+   {
+    "id": "skRate",
+    "name": "Skip Rate",
+    "index": 7,
+    "min": 0.5,
+    "max": 16.0,
+    "default": 4.0,
+    "unit": ""
+   },
+   {
+    "id": "skAmt",
+    "name": "Skip Amt",
+    "index": 8,
+    "min": 0.0,
+    "max": 1.0,
+    "default": 0.5,
+    "unit": ""
+   },
+   {
+    "id": "dlOn",
+    "name": "Delay On",
+    "index": 9,
+    "min": 0.0,
+    "max": 1.0,
+    "default": 0.0,
+    "unit": ""
+   },
+   {
+    "id": "dlTime",
+    "name": "Delay Time",
+    "index": 10,
+    "min": 1.0,
+    "max": 1000.0,
+    "default": 250.0,
+    "unit": ""
+   },
+   {
+    "id": "dlFb",
+    "name": "Delay FB",
+    "index": 11,
+    "min": 0.0,
+    "max": 0.95,
+    "default": 0.35,
+    "unit": ""
+   },
+   {
+    "id": "chOn",
+    "name": "Chop On",
+    "index": 12,
+    "min": 0.0,
+    "max": 1.0,
+    "default": 0.0,
+    "unit": ""
+   },
+   {
+    "id": "chRate",
+    "name": "Chop Rate",
+    "index": 13,
+    "min": 0.1,
+    "max": 24.0,
+    "default": 8.0,
+    "unit": ""
+   },
+   {
+    "id": "chDepth",
+    "name": "Chop Depth",
+    "index": 14,
+    "min": 0.0,
+    "max": 1.0,
+    "default": 0.8,
+    "unit": ""
+   },
+   {
+    "id": "vcOn",
+    "name": "Vocoder On",
+    "index": 15,
+    "min": 0.0,
+    "max": 1.0,
+    "default": 0.0,
+    "unit": ""
+   },
+   {
+    "id": "vcTone",
+    "name": "Voc Tone",
+    "index": 16,
+    "min": 0.0,
+    "max": 1.0,
+    "default": 0.5,
+    "unit": ""
+   },
+   {
+    "id": "vcMix",
+    "name": "Voc Mix",
+    "index": 17,
+    "min": 0.0,
+    "max": 1.0,
+    "default": 0.7,
+    "unit": ""
+   },
+   {
+    "id": "rvOn",
+    "name": "Reverb On",
+    "index": 18,
+    "min": 0.0,
+    "max": 1.0,
+    "default": 0.0,
+    "unit": ""
+   },
+   {
+    "id": "rvSize",
+    "name": "Verb Size",
+    "index": 19,
+    "min": 0.0,
+    "max": 1.0,
+    "default": 0.5,
+    "unit": ""
+   },
+   {
+    "id": "rvMix",
+    "name": "Verb Mix",
+    "index": 20,
+    "min": 0.0,
+    "max": 1.0,
+    "default": 0.3,
+    "unit": ""
+   },
+   {
+    "id": "hmAuto",
+    "name": "Harm Auto",
+    "index": 21,
+    "min": 0.0,
+    "max": 1.0,
+    "default": 0.0,
+    "unit": ""
+   },
+   {
+    "id": "atScale",
+    "name": "Tune Scale",
+    "index": 22,
+    "min": 0.0,
+    "max": 2.0,
+    "default": 0.0,
+    "unit": ""
+   }
+  ],
+  "setters": [
+   "setAutotune",
+   "setChop",
+   "setDelay",
+   "setHarmonizer",
+   "setReverb",
+   "setSkip",
+   "setVocoder"
+  ],
+  "objc_methods": [
+   "allocateRenderResourcesAndReturnError",
+   "applyPreset",
+   "buildParameterTree",
+   "dealloc",
+   "deallocateRenderResources",
+   "initWithComponentDescription",
+   "inputBusses",
+   "internalRenderBlock",
+   "outputBusses",
+   "presetCount",
+   "presetName",
+   "readSpectrumBands"
+  ],
+  "dsp_headers": [
+   "DSPCommon.hpp",
+   "PitchShifterHQ.hpp",
+   "VoiceBoxEngine.hpp"
+  ],
+  "au_source": "VoiceBoxAudioUnit.mm"
+ },
+ "UltraReverse": {
+  "type": "effect",
+  "subtype": "Urv1",
+  "manufacturer": "Para",
+  "empty_tree": false,
+  "params": [
+   {
+    "id": "reverse",
+    "name": "Reverse",
+    "index": 0,
+    "min": 0.1,
+    "max": 4.0,
+    "default": 0.6,
+    "unit": "s"
+   },
+   {
+    "id": "size",
+    "name": "Size",
+    "index": 1,
+    "min": 0.0,
+    "max": 1.0,
+    "default": 0.7,
+    "unit": "gain"
+   },
+   {
+    "id": "decay",
+    "name": "Decay",
+    "index": 2,
+    "min": 0.3,
+    "max": 30.0,
+    "default": 4.0,
+    "unit": "s"
+   },
+   {
+    "id": "shimmer",
+    "name": "Shimmer",
+    "index": 3,
+    "min": 0.0,
+    "max": 1.0,
+    "default": 0.3,
+    "unit": "gain"
+   },
+   {
+    "id": "diffusion",
+    "name": "Diffusion",
+    "index": 4,
+    "min": 0.0,
+    "max": 1.0,
+    "default": 0.6,
+    "unit": "gain"
+   },
+   {
+    "id": "texture",
+    "name": "Texture",
+    "index": 5,
+    "min": 0.0,
+    "max": 1.0,
+    "default": 0.7,
+    "unit": "gain"
+   },
+   {
+    "id": "predelay",
+    "name": "Predelay",
+    "index": 6,
+    "min": 0.0,
+    "max": 300.0,
+    "default": 20.0,
+    "unit": "ms"
+   },
+   {
+    "id": "tone",
+    "name": "Tone",
+    "index": 7,
+    "min": 0.0,
+    "max": 1.0,
+    "default": 0.5,
+    "unit": "gain"
+   },
+   {
+    "id": "mix",
+    "name": "Mix",
+    "index": 8,
+    "min": 0.0,
+    "max": 1.0,
+    "default": 0.4,
+    "unit": "gain"
+   }
+  ],
+  "setters": [
+   "setDecaySec",
+   "setDiffusion",
+   "setMix",
+   "setPredelayMs",
+   "setReverse",
+   "setShimmer",
+   "setSize",
+   "setTexture",
+   "setTone"
+  ],
+  "objc_methods": [
+   "allocateRenderResourcesAndReturnError",
+   "build",
+   "deallocateRenderResources",
+   "initWithComponentDescription",
+   "inputBusses",
+   "internalRenderBlock",
+   "outputBusses",
+   "probeSize",
+   "readProbeDry"
+  ],
+  "dsp_headers": [
+   "UltraReverse.hpp"
+  ],
+  "au_source": "UltraReverseAudioUnit.mm"
+ },
+ "StringThing": {
+  "type": "instrument",
+  "subtype": "Str1",
+  "manufacturer": "Para",
+  "empty_tree": true,
+  "params": [],
+  "setters": [
+   "setBPM",
+   "setCell",
+   "setChain",
+   "setChop",
+   "setChopType",
+   "setColSwing",
+   "setDelay",
+   "setDelayType",
+   "setDirection",
+   "setDirt",
+   "setDroneInterval",
+   "setDroneLevel",
+   "setDroneOctave",
+   "setDroneOn",
+   "setDubstepStep",
+   "setEnvAmp",
+   "setEnvFlt",
+   "setFilter",
+   "setGate",
+   "setGridOctave",
+   "setGridSteps",
+   "setHalfTone",
+   "setHostBeatPosition",
+   "setLevel",
+   "setMix",
+   "setMod",
+   "setMode",
+   "setNoise",
+   "setOctaveRange",
+   "setPlaying",
+   "setRate",
+   "setRecordArmed",
+   "setReverb",
+   "setReverbType",
+   "setRootKey",
+   "setScale",
+   "setSlot",
+   "setStep",
+   "setSwing",
+   "setVoiceMode"
+  ],
+  "objc_methods": [
+   "allocateRenderResourcesAndReturnError",
+   "ampA",
+   "ampD",
+   "ampR",
+   "ampS",
+   "amplitudeEnv",
+   "bpmSynced",
+   "cellAtRow",
+   "chainPosition",
+   "chop",
+   "chopType",
+   "chordCount",
+   "chordNoteAt",
+   "clearChain",
+   "clearGrid",
+   "colSwing",
+   "copyPatternToSlot",
+   "currentSlot",
+   "currentStep",
+   "cutoffHz",
+   "deallocateRenderResources",
+   "delayFx",
+   "delayType",
+   "direction",
+   "dirt",
+   "droneInterval",
+   "droneLevel",
+   "droneOctave",
+   "droneOn",
+   "dubstepDivisionCount",
+   "dubstepDivisionName",
+   "dubstepPatternLen",
+   "dubstepStep",
+   "filterEnvAmount",
+   "fltA",
+   "fltD",
+   "fltR",
+   "fltS",
+   "gate",
+   "gridOctave",
+   "gridRowMidi",
+   "gridSteps",
+   "halfTone",
+   "initWithComponentDescription",
+   "internalRenderBlock",
+   "level",
+   "loadPhrase",
+   "loadStateData",
+   "mixSaw",
+   "mixSquare",
+   "mixSub",
+   "mod",
+   "mode",
+   "noise",
+   "numGridRows",
+   "octaveRange",
+   "outputBusses",
+   "pushAmpEnv",
+   "pushFilter",
+   "pushFltEnv",
+   "pushMix",
+   "rate",
+   "readNoteHistory",
+   "recordArmed",
+   "resonance",
+   "reverbFx",
+   "reverbType",
+   "rootKey",
+   "scaleId",
+   "setAmpA",
+   "setAmpD",
+   "setAmpR",
+   "setAmpS",
+   "setBpm",
+   "setCellAtRow",
+   "setChainSlots",
+   "setChop",
+   "setChopType",
+   "setColSwing",
+   "setCurrentSlot",
+   "setCutoffHz",
+   "setDelayFx",
+   "setDelayType",
+   "setDirection",
+   "setDirt",
+   "setDroneInterval",
+   "setDroneLevel",
+   "setDroneOctave",
+   "setDroneOn",
+   "setDubstepStep",
+   "setFilterEnvAmount",
+   "setFltA",
+   "setFltD",
+   "setFltR",
+   "setFltS",
+   "setFullState",
+   "setGate",
+   "setGridOctave",
+   "setGridSteps",
+   "setHalfTone",
+   "setLevel",
+   "setMixSaw",
+   "setMixSquare",
+   "setMixSub",
+   "setMod",
+   "setMode",
+   "setNoise",
+   "setOctaveRange",
+   "setPlaying",
+   "setRate",
+   "setRecordArmed",
+   "setResonance",
+   "setReverbFx",
+   "setReverbType",
+   "setRootKey",
+   "setScaleId",
+   "setStep",
+   "setSwing",
+   "setTone",
+   "setVoiceMode",
+   "stateData",
+   "stepOct",
+   "stepOn",
+   "stepSemi",
+   "swing",
+   "tone",
+   "voiceMode"
+  ],
+  "dsp_headers": [
+   "StringThingEngine.hpp"
+  ],
+  "au_source": "StringThingAudioUnit.mm"
+ },
+ "PitchKnob": {
+  "type": "effect",
+  "subtype": "Ptk1",
+  "manufacturer": "Para",
+  "empty_tree": false,
+  "params": [
+   {
+    "id": "knob",
+    "name": "Pitch",
+    "index": 0,
+    "min": 0.0,
+    "max": 1.0,
+    "default": 0.5,
+    "unit": "gain"
+   },
+   {
+    "id": "filter",
+    "name": "Filter",
+    "index": 1,
+    "min": 0.0,
+    "max": 1.0,
+    "default": 0.5,
+    "unit": "gain"
+   }
+  ],
+  "setters": [
+   "setFilter",
+   "setPitch"
+  ],
+  "objc_methods": [
+   "allocateRenderResourcesAndReturnError",
+   "deallocateRenderResources",
+   "initWithComponentDescription",
+   "inputBusses",
+   "internalRenderBlock",
+   "outputBusses"
+  ],
+  "dsp_headers": [
+   "PitchKnobDSP.hpp"
+  ],
+  "au_source": "PitchKnobAudioUnit.mm"
+ },
+ "RoarBass": {
+  "type": "instrument",
+  "subtype": "Roar",
+  "manufacturer": "Anth",
+  "empty_tree": false,
+  "params": [
+   {
+    "id": "osc1Oct",
+    "name": "OSC1 Octave",
+    "index": 0,
+    "min": -2.0,
+    "max": 2.0,
+    "default": 0.0,
+    "unit": "oct"
+   },
+   {
+    "id": "osc2Oct",
+    "name": "OSC2 Octave",
+    "index": 1,
+    "min": -2.0,
+    "max": 2.0,
+    "default": 0.0,
+    "unit": "oct"
+   },
+   {
+    "id": "osc2Det",
+    "name": "OSC2 Detune",
+    "index": 2,
+    "min": -50.0,
+    "max": 50.0,
+    "default": 7.0,
+    "unit": "cents"
+   },
+   {
+    "id": "oscMix",
+    "name": "OSC Mix",
+    "index": 3,
+    "min": 0.0,
+    "max": 1.0,
+    "default": 0.5,
+    "unit": ""
+   },
+   {
+    "id": "sub",
+    "name": "Sub Level",
+    "index": 4,
+    "min": 0.0,
+    "max": 1.0,
+    "default": 0.7,
+    "unit": "gain"
+   },
+   {
+    "id": "fmAmt",
+    "name": "FM Growl",
+    "index": 5,
+    "min": 0.0,
+    "max": 1.0,
+    "default": 0.25,
+    "unit": "gain"
+   },
+   {
+    "id": "fmRatio",
+    "name": "FM Ratio",
+    "index": 6,
+    "min": 0.25,
+    "max": 8.0,
+    "default": 1.0,
+    "unit": "ratio"
+   },
+   {
+    "id": "fmFb",
+    "name": "FM Feedback",
+    "index": 7,
+    "min": 0.0,
+    "max": 1.0,
+    "default": 0.2,
+    "unit": "gain"
+   },
+   {
+    "id": "nz",
+    "name": "Noise Level",
+    "index": 8,
+    "min": 0.0,
+    "max": 1.0,
+    "default": 0.0,
+    "unit": "gain"
+   },
+   {
+    "id": "nzColor",
+    "name": "Noise Colour",
+    "index": 9,
+    "min": 0.0,
+    "max": 1.0,
+    "default": 0.7,
+    "unit": ""
+   },
+   {
+    "id": "cut",
+    "name": "Filter Cutoff",
+    "index": 10,
+    "min": 20.0,
+    "max": 18000.0,
+    "default": 700.0,
+    "unit": "Hz"
+   },
+   {
+    "id": "res",
+    "name": "Resonance",
+    "index": 11,
+    "min": 0.0,
+    "max": 1.0,
+    "default": 0.25,
+    "unit": "gain"
+   },
+   {
+    "id": "drv",
+    "name": "Filter Drive",
+    "index": 12,
+    "min": 0.0,
+    "max": 1.0,
+    "default": 0.2,
+    "unit": "gain"
+   },
+   {
+    "id": "fEnv",
+    "name": "Filter Env Amt",
+    "index": 13,
+    "min": -1.0,
+    "max": 1.0,
+    "default": 0.4,
+    "unit": "gain"
+   },
+   {
+    "id": "aA",
+    "name": "Amp Attack",
+    "index": 14,
+    "min": 0.001,
+    "max": 4.0,
+    "default": 0.005,
+    "unit": "s"
+   },
+   {
+    "id": "aD",
+    "name": "Amp Decay",
+    "index": 15,
+    "min": 0.001,
+    "max": 4.0,
+    "default": 0.2,
+    "unit": "s"
+   },
+   {
+    "id": "aS",
+    "name": "Amp Sustain",
+    "index": 16,
+    "min": 0.0,
+    "max": 1.0,
+    "default": 0.85,
+    "unit": "gain"
+   },
+   {
+    "id": "aR",
+    "name": "Amp Release",
+    "index": 17,
+    "min": 0.001,
+    "max": 4.0,
+    "default": 0.3,
+    "unit": "s"
+   },
+   {
+    "id": "fA",
+    "name": "Filter Attack",
+    "index": 18,
+    "min": 0.001,
+    "max": 4.0,
+    "default": 0.005,
+    "unit": "s"
+   },
+   {
+    "id": "fD",
+    "name": "Filter Decay",
+    "index": 19,
+    "min": 0.001,
+    "max": 4.0,
+    "default": 0.4,
+    "unit": "s"
+   },
+   {
+    "id": "fS",
+    "name": "Filter Sustain",
+    "index": 20,
+    "min": 0.0,
+    "max": 1.0,
+    "default": 0.4,
+    "unit": "gain"
+   },
+   {
+    "id": "fR",
+    "name": "Filter Release",
+    "index": 21,
+    "min": 0.001,
+    "max": 4.0,
+    "default": 0.3,
+    "unit": "s"
+   },
+   {
+    "id": "glide",
+    "name": "Glide",
+    "index": 22,
+    "min": 0.0,
+    "max": 1.0,
+    "default": 0.0,
+    "unit": "s"
+   },
+   {
+    "id": "vmode",
+    "name": "Voice Mode",
+    "index": 23,
+    "min": 0.0,
+    "max": 1.0,
+    "default": 0.0,
+    "unit": "indexed"
+   },
+   {
+    "id": "mg",
+    "name": "Master Gain",
+    "index": 24,
+    "min": 0.0,
+    "max": 2.0,
+    "default": 0.9,
+    "unit": "gain"
+   },
+   {
+    "id": "dOut",
+    "name": "Output Drive",
+    "index": 25,
+    "min": 0.0,
+    "max": 1.0,
+    "default": 0.1,
+    "unit": "gain"
+   }
+  ],
+  "setters": [
+   "setParameter"
+  ],
+  "objc_methods": [
+   "allocateRenderResourcesAndReturnError",
+   "collect",
+   "deallocateRenderResources",
+   "initWithComponentDescription",
+   "internalRenderBlock",
+   "latency",
+   "outputBusses",
+   "supportsMPE",
+   "tailTime"
+  ],
+  "dsp_headers": [
+   "DSPCommon.hpp",
+   "Envelope.hpp",
+   "FMOperator.hpp",
+   "LadderFilter.hpp",
+   "NoiseSource.hpp",
+   "Oscillator.hpp",
+   "RoarBassDSP.hpp",
+   "Voice.hpp"
+  ],
+  "au_source": "RoarBassAudioUnit.mm"
+ }
+}

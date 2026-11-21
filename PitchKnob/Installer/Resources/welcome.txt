@@ -1,0 +1,3 @@
+Pitch Knob — Paradise Audio
+A one-knob DJ-style filter. Left = low pass sweep. Right = high pass sweep. Center = bypass.
+After install, open Pitch Knob.app once, then Logic ▸ AU Effects ▸ Paradise Audio ▸ Pitch Knob.

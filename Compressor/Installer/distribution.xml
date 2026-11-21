@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<installer-gui-script minSpecVersion="2">
+    <title>Compressor</title>
+    <organization>com.anthropic</organization>
+    <domains enable_localSystem="true"/>
+    <options customize="never" require-scripts="false" rootVolumeOnly="true"/>
+    <welcome file="welcome.txt" mime-type="text/plain"/>
+    <conclusion file="conclusion.txt" mime-type="text/plain"/>
+    <choices-outline>
+        <line choice="default">
+            <line choice="com.anthropic.Compressor.pkg"/>
+        </line>
+    </choices-outline>
+    <choice id="default"/>
+    <choice id="com.anthropic.Compressor.pkg" visible="false">
+        <pkg-ref id="com.anthropic.Compressor.pkg"/>
+    </choice>
+    <pkg-ref id="com.anthropic.Compressor.pkg" version="1.0.0" onConclusion="none">Compressor-component.pkg</pkg-ref>
+</installer-gui-script>

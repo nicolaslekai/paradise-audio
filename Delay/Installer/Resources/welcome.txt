@@ -1,0 +1,3 @@
+Delay — Paradise Audio
+Stereo tempo-sync delay with ping-pong.
+After install, open Delay.app once, then Logic ▸ AU Effects ▸ Paradise Audio ▸ Delay.

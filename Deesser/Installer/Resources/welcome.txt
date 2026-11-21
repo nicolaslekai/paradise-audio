@@ -1,0 +1,3 @@
+De-esser — Paradise Audio
+Sibilance de-esser with band-passed sidechain detection.
+After install, open Deesser.app once, then Logic ▸ AU Effects ▸ Paradise Audio ▸ De-esser.

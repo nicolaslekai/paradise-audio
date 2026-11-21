@@ -1,0 +1,7 @@
+Ultra Reverse is installed.
+
+Quit and reopen Logic Pro, then look under
+AU Effects ▸ Paradise Audio ▸ Ultra Reverse.
+
+Tip: start with MIX low and TEXTURE high for a reversed-swell pad under a
+sustained source; raise DECAY and SHIMMER for an endless ambient wash.

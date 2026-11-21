@@ -1,0 +1,3 @@
+Saturation — Paradise Audio
+Asymmetric soft-clip drive with tilt EQ and parallel mix.
+After install, open Saturation.app once, then Logic ▸ AU Effects ▸ Paradise Audio ▸ Saturation.

@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleDevelopmentRegion</key>
+    <string>en</string>
+    <key>CFBundleExecutable</key>
+    <string>$(EXECUTABLE_NAME)</string>
+    <key>CFBundleIdentifier</key>
+    <string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+    <key>CFBundleInfoDictionaryVersion</key>
+    <string>6.0</string>
+    <key>CFBundleName</key>
+    <string>$(PRODUCT_NAME)</string>
+    <key>CFBundlePackageType</key>
+    <string>XPC!</string>
+    <key>CFBundleShortVersionString</key>
+    <string>1.0.0</string>
+    <key>CFBundleVersion</key>
+    <string>1</string>
+    <key>NSExtension</key>
+    <dict>
+        <key>NSExtensionAttributes</key>
+        <dict>
+            <key>AudioComponentBundle</key>
+            <string>com.anthropic.RoarBass.AudioUnit</string>
+            <key>AudioComponents</key>
+            <array>
+                <dict>
+                    <key>name</key>
+                    <string>Paradise Audio: Roar Bass</string>
+                    <key>description</key>
+                    <string>Deep roary bass synth</string>
+                    <key>factoryFunction</key>
+                    <string>RoarBassExtension.AudioUnitViewController</string>
+                    <key>manufacturer</key>
+                    <string>Anth</string>
+                    <key>subtype</key>
+                    <string>Roar</string>
+                    <key>type</key>
+                    <string>aumu</string>
+                    <key>version</key>
+                    <integer>65536</integer>
+                    <key>sandboxSafe</key>
+                    <true/>
+                    <key>tags</key>
+                    <array>
+                        <string>Synth</string>
+                        <string>Bass</string>
+                    </array>
+                </dict>
+            </array>
+        </dict>
+        <key>NSExtensionPointIdentifier</key>
+        <string>com.apple.AudioUnit-UI</string>
+        <key>NSExtensionPrincipalClass</key>
+        <string>RoarBassExtension.AudioUnitViewController</string>
+    </dict>
+</dict>
+</plist>

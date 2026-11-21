@@ -1,0 +1,7 @@
+Compressor — Paradise Audio
+
+A clean OP-1-styled AUv3 compressor for Logic Pro and any AU host on macOS.
+
+This installer puts Compressor.app into /Applications. First launch of the app
+registers the AU with macOS — after that, you'll find the plug-in in Logic at
+AU Effects ▸ Paradise Audio ▸ Compressor.
