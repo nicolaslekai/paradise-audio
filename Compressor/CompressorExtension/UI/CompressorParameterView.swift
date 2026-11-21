@@ -570,25 +570,6 @@ final class DuckPanel: NSView {
             ctx.setStrokeColor(inkDark.withAlphaComponent(0.45).cgColor); ctx.setLineWidth(1.0)
             ctx.addPath(path); ctx.strokePath()
         }
-
-        // Live pump rings from the base on every duck trigger.
-        let envDB = audioUnit?.currentDuckDB ?? 0
-        let pumpAmt = min(1.0, max(0.0, Double(envDB) / 12.0))
-        if pumpAmt > 0.05 {
-            ctx.saveGState()
-            ctx.addPath(path); ctx.clip()
-            let cxR = plate.midX
-            let cyR = plate.minY + plate.height * 0.22
-            for i in 0..<3 {
-                let phase = max(0.0, pumpAmt - CGFloat(i) * 0.18)
-                if phase <= 0 { continue }
-                let radius: CGFloat = 8 + CGFloat(i) * 5 + phase * 5
-                ctx.setStrokeColor(red.withAlphaComponent(phase * 0.6).cgColor)
-                ctx.setLineWidth(1.2)
-                ctx.strokeEllipse(in: NSRect(x: cxR - radius, y: cyR - radius * 0.35, width: radius * 2, height: radius * 0.7))
-            }
-            ctx.restoreGState()
-        }
     }
 
     // MARK: - Mouse

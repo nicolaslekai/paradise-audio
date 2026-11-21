@@ -411,10 +411,14 @@ static void testRender() {
     { Phrase P = makePhrase(sr, 47.0); Buf x = scaled(P.x, 0.5); srcs.push_back({"_synthphrase", x, x}); }
     struct C { const char* name; std::function<void(AUHost&)> set; };
     const C cfgs[] = { {"alloff", [](AUHost& h) { h.allOff(); }}, {"TUNED", [](AUHost& h) { h.preset(1); }}, {"ROBOT", [](AUHost& h) { h.preset(3); }},
-                       {"OCTAVEplus", [](AUHost& h) { h.preset(2); }}, {"FULL", [](AUHost& h) { h.preset(9); }} };
+                       {"OCTAVEplus", [](AUHost& h) { h.preset(2); }}, {"FULL", [](AUHost& h) { h.preset(9); }},
+                       {"VOCODER", [](AUHost& h) { h.allOff(); h.p[15] = 1; h.p[16] = 0.55f; h.p[17] = 0.85f; }},        // as in the 2026-11-21 screenshot
+                       {"VOCODERbright", [](AUHost& h) { h.allOff(); h.p[15] = 1; h.p[16] = 1.0f; h.p[17] = 1.0f; }} };
+    const char* only = std::getenv("VBX_RENDER_ONLY");   // e.g. VBX_RENDER_ONLY=VOCODER renders just the configs whose name starts with it
     for (const Src& sc : srcs) {
         if (gTag == "after") writeWavF(std::string(dir) + "/voicebox_input" + sc.suffix + "_KJ_v001.wav", sc.L, sc.R, sr);
         for (const C& c : cfgs) {
+            if (only && std::string(c.name).rfind(only, 0) != 0) continue;
             AUHost h(sr); c.set(h); const int lat = h.latency();
             Buf inL(sc.L), inR(sc.R); inL.resize(inL.size() + lat + sr, 0.0f); inR.resize(inR.size() + lat + sr, 0.0f);   // room for the latency + 1 s of tail
             Buf L, R; h.render(inL, inR, L, R, 512);

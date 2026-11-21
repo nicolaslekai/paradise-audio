@@ -101,6 +101,14 @@ struct PitchShifter {
 // that at 96 kHz — followed single cycles, which is intermodulation = grit).
 // The voice above the top band (≈ 6 kHz) passes straight through, so "s" and
 // "t" stay intelligible and the wet signal keeps its air.
+//
+// 2026-11-21 (later): stronger effect. A carrier made only from the voice gives
+// the voice back almost unchanged (every band is level-matched), so the engine
+// now also feeds a band-limited sawtooth at the tracked (and autotuned) pitch.
+// `synthShare` blends it into the carrier on voiced sound: 0 = the old,
+// voice-only carrier … 1 = pure synth buzz (the classic robot). Consonants and
+// breath have no pitch and keep the voice carrier. The level law is unchanged —
+// each carrier band is still normalised before the voice's envelope goes on.
 struct Vocoder {
     static const int N = 16;
     float sr = 48000.0f;
@@ -137,12 +145,14 @@ struct Vocoder {
     }
     /// Returns the WET signal only (the engine blends it with the dry voice).
     /// `tone` opens the carrier: 0 = soft, close to the voice … 1 = bright, buzzy.
-    inline float process(float x, float tone) {
+    /// `synth` = unit-amplitude sawtooth at the voice's pitch, `synthShare` 0…1 how much of the carrier it is.
+    inline float process(float x, float tone, float synth = 0.0f, float synthShare = 0.0f) {
         // Carrier: the voice at unit level through a soft saturator.
         const float e2 = x * x;
         lvl2_ += (e2 > lvl2_ ? lvlAtt_ : lvlRel_) * (e2 - lvl2_);
         const float u = x / std::max(std::sqrt(lvl2_), 1e-4f);
-        const float carrier = std::tanh(u * (0.30f + 0.70f * tone));
+        const float own = std::tanh(u * (0.30f + 0.70f * tone));
+        const float carrier = own + synthShare * (synth - own);
         const float tD = clampf(1.0f - 2.0f * tone, 0.0f, 1.0f), tB = clampf(2.0f * tone - 1.0f, 0.0f, 1.0f);
         float out = 0.0f;
         for (int i = 0; i < N; ++i) {
@@ -377,6 +387,20 @@ public:
         hqLowDly_.prepare(L_ - hqLow_.trueLatency());
         for (Fade* f : { &fAuto_, &fLowP_, &fLowH_, &fHarmP_, &fHarmH_, &fSkip_ }) { f->prepare(sr); f->g = 0.0f; f->warm = 0; }
         fVoc_.prepare(sr); fDly_.prepare(sr, 0.030f); fRev_.prepare(sr, 0.030f);
+        vocHzA_ = 1.0f - std::exp(-1.0f / (0.006f * sr)); vocSynStep_ = 1.0f / (0.015f * sr);   // 6 ms pitch glide, 15 ms voiced ↔ unvoiced
+        {   // Chirp kernel 0 → 7 kHz in 3 ms (the band bank ends at 6.5 kHz), unit energy, edges tapered.
+            const int kn = std::max(8, (int)(0.003f * sr));
+            vocKern_.assign((size_t)kn, 0.0f); vocRing_.assign((size_t)kn, 0.0f); vocRW_ = 0;
+            double e = 0.0;
+            for (int n = 0; n < kn; ++n) {
+                const double t = (double)n / (double)sr, u = (double)n / (double)(kn - 1);
+                const double taper = std::min(1.0, std::min(u, 1.0 - u) / 0.08);
+                const double h = std::sin(2.0 * 3.14159265358979 * 0.5 * (7000.0 / 0.003) * t * t) * (0.5 - 0.5 * std::cos(3.14159265358979 * taper));
+                vocKern_[(size_t)n] = (float)h; e += h * h;
+            }
+            const float g = (float)(1.0 / std::sqrt(std::max(e, 1e-12)));
+            for (float& h : vocKern_) h *= g;
+        }
         for (Fade* f : { &fVoc_, &fDly_, &fRev_ }) { f->g = 0.0f; f->warm = 0; }
         vocClean_ = dlyClean_ = revClean_ = true;
         lim_.prepare(sr);
@@ -403,6 +427,9 @@ public:
         lim_.reset(); snap_ = true;
         lowHqRun_ = harmHqRun_ = false;
         chopPhase_ = skipPhase_ = 0; skipCents_ = skipTarget_ = harmCents_ = 0; chopGain_ = 1.0f;
+        vocVoiced_ = false; vocPh_ = 0.0f; vocSynG_ = 0.0f;
+        vocRef_ = vocRefPk_ = vocSubT_ = vocGapT_ = 0.0f;
+        std::fill(vocRing_.begin(), vocRing_.end(), 0.0f); vocRW_ = 0;
         for (float& p : pc_) p = 0.0f;
     }
 
@@ -497,6 +524,31 @@ public:
         if (fHarmH_.live() || (harmOn_ && harmHQ)) { const float h = hqHarmDly_.push(hqHarm_.process(core_.newestM(), centsToRatio(harmFixedCents_))); harmOut += fHarmH_.g * h; harmW += fHarmH_.g; }
         float skipOut = fSkip_.live() ? core_.renderMono(kVSkip) : 0.0f;
 
+        // VOCODER carrier oscillator (one for both channels): polyBLEP sawtooth at the pitch the tracker
+        // reports (see updateControls for the octave rule), with a 6 ms glide inside a note.
+        float vocSaw = 0.0f, vocShare = 0.0f;
+        if (fVoc_.live()) {
+            if (vocVoiced_ && vocSynG_ <= 0.0f) vocHzS_ = vocHz_;                 // a new note starts on its pitch, no glide in
+            vocHzS_ += vocHzA_ * (vocHz_ - vocHzS_);
+            vocSynG_ = vocVoiced_ ? std::min(1.0f, vocSynG_ + vocSynStep_) : std::max(0.0f, vocSynG_ - vocSynStep_);
+            const float dt = clampf(vocHzS_ / sr_, 1e-5f, 0.2f);
+            vocPh_ += dt; if (vocPh_ >= 1.0f) vocPh_ -= 1.0f;
+            float saw = 2.0f * vocPh_ - 1.0f;
+            if (vocPh_ < dt)             { const float t = vocPh_ / dt;          saw -= t + t - t * t - 1.0f; }
+            else if (vocPh_ > 1.0f - dt) { const float t = (vocPh_ - 1.0f) / dt; saw -= t * t + t + t + 1.0f; }
+            // Dispersion: a sawtooth has all its harmonics in phase; level-matched band by band that adds
+            // up to one needle per period (crest factor 15 dB against 9 dB for the voice carrier, measured)
+            // and drives the output limiter. A 3 ms chirp kernel spreads the needle over the period.
+            const int kn = (int)vocKern_.size(), rn = (int)vocRing_.size();
+            vocRing_[vocRW_] = saw;
+            float acc = 0.0f; int r = vocRW_;
+            for (int k = 0; k < kn; ++k) { acc += vocKern_[k] * vocRing_[r]; if (--r < 0) r = rn - 1; }
+            if (++vocRW_ >= rn) vocRW_ = 0;
+            vocSaw = acc;
+            // TONE also sets how synthetic the carrier is: 15 % at 0 (soft, close to the voice) … 100 % at 1.
+            vocShare = clampf(0.15f + 0.85f * vocToneS_, 0.0f, 1.0f) * vocSynG_ * vocSynG_ * (3.0f - 2.0f * vocSynG_);
+        }
+
         const int dN = (int)delayBuf_[0].size();
         const float dSamp = std::max(1.0f, std::min((float)(dN - 3), delaySampS_));
         const int   dInt = (int)dSamp; const float dFr = dSamp - (float)dInt;
@@ -505,7 +557,7 @@ public:
             // 1.2) LOW TUNER — replace (mix 1) or blend the lead with the lowered voice.
             if (lowW > 0.0f) x += (lowOut - lowW * x) * lowMixS_;
             // 1.5) VOCODER — wet/dry blend, faded in and out over 10 ms.
-            if (fVoc_.live()) { const float wet = voc_[ch].process(x, vocToneS_); x += (wet - x) * (vocMixS_ * fVoc_.g); }
+            if (fVoc_.live()) { const float wet = voc_[ch].process(x, vocToneS_, vocSaw, vocShare); x += (wet - x) * (vocMixS_ * fVoc_.g); }
             // 2) HARMONIZER — add the harmony voice (same mixing law as before).
             if (harmW > 0.0f) x = x * (1.0f - 0.4f * harmMixS_ * harmW) + harmOut * harmMixS_;
             // 3) PITCH-SKIP — sample-and-hold pitch jumps, blended in.
@@ -586,6 +638,26 @@ private:
         }
         harmFixedCents_ = harmSemis_ * 100.0f + atC;
         lowCents_ = lowSemis_ * 100.0f + atC;
+        // Vocoder carrier pitch: that of what the vocoder is fed (lead after AUTOTUNE, or the LOW TUNER voice).
+        // Octave rule: on doubled or wet vocals the tracker drops to a half or a third of the pitch in the
+        // tail of a note (measured on the test take: 104 Hz for a sung 316 Hz) and a carrier that follows
+        // buzzes an octave or a twelfth too low. Inside a phrase (gaps < 120 ms) a drop to 1/2 or 1/3 of the
+        // carrier pitch is therefore answered with the same multiple — for 250 ms, and for as long after
+        // that as the voice is below half the phrase's level. A real, sustained octave leap down arrives
+        // 250 ms late; everything else follows the tracker directly.
+        vocVoiced_ = st.voiced && st.hz > 0.0f;
+        if (vocVoiced_) {
+            float f = st.hz;
+            vocGapT_ = 0.0f;
+            vocRefPk_ = std::max(st.rms, vocRefPk_ * std::exp(-dt / 1.0f));
+            if (vocRef_ > 0.0f) {
+                const float r = vocRef_ / f, k = std::round(r);
+                const bool sub = (k == 2.0f || k == 3.0f) && std::fabs(r - k) < 0.06f * k;
+                if (sub && (vocSubT_ < 0.25f || st.rms < 0.5f * vocRefPk_)) { vocSubT_ += dt; f *= k; } else vocSubT_ = 0.0f;
+            }
+            vocRef_ = f;
+            vocHz_ = f * centsToRatio((lowOn_ && lowMix_ > 0.5f) ? lowCents_ : atC);
+        } else if ((vocGapT_ += dt) > 0.12f) vocRef_ = vocRefPk_ = vocSubT_ = 0.0f;
         // Pitch-skip: sample-and-hold steps, 5 ms ramp.
         skipPhase_ += skipRate_ * dt;
         if (skipPhase_ >= 1.0f) {
@@ -637,6 +709,11 @@ private:
     // VOCODER (per channel)
     bool  vocOn_ = false; float vocTone_ = 0.5f, vocMix_ = 0.7f;
     Vocoder voc_[2];
+    bool  vocVoiced_ = false;
+    float vocHz_ = 150.0f, vocHzS_ = 150.0f, vocPh_ = 0.0f, vocSynG_ = 0.0f;
+    float vocHzA_ = 0.0035f, vocSynStep_ = 1.0f / 720.0f;
+    float vocRef_ = 0.0f, vocRefPk_ = 0.0f, vocSubT_ = 0.0f, vocGapT_ = 0.0f;   // octave rule (updateControls)
+    std::vector<float> vocKern_, vocRing_; int vocRW_ = 0;
     // REVERB (stereo)
     bool  revOn_ = false; float revSize_ = 0.5f, revMix_ = 0.3f;
     Reverb rev_;
