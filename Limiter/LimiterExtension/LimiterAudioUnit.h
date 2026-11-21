@@ -22,14 +22,25 @@ NS_ASSUME_NONNULL_BEGIN
 /// first. Returns the count copied. Used by the waveform visualizer.
 - (int)readWaveformInto:(float * _Nonnull)out count:(int)n;
 
+/// Editor display tap (2026-11-21). Copies up to `n` of the newest ~6 ms
+/// buckets into `out`, oldest first, 5 floats per bucket:
+///   inHi, inLo   (trimmed input, linear, signed — same scale as THRESHOLD)
+///   outHi, outLo (output, linear, signed — same scale as CEILING)
+///   grDB         (max gain reduction in the bucket, positive dB)
+/// Returns the count; `writeCount` receives the running bucket counter.
+- (int)readTapInto:(float * _Nonnull)out maxBuckets:(int)n writeCount:(uint32_t * _Nonnull)writeCount;
+/// Seconds of audio per tap bucket.
+@property (nonatomic, readonly) double tapBucketSeconds;
+
 /// Real-time FFT spectrum probe (same as the EQ's). Fills `outDB` with
 /// `count` log-spaced magnitude bands (dB) covering 20 Hz – 20 kHz from the
 /// post-limit signal. UI polls this on a timer to draw the live spectrum.
 - (BOOL)readSpectrumBands:(float * _Nonnull)outDB count:(int)count;
 
 /// Apply one of the loudness-target presets:
-///   0 = BROADCAST (-23 LUFS target): gain +6, ceiling -3, release 100 ms
-///   1 = STREAM    (-14 LUFS target): gain +12, ceiling -1, release 60 ms
+///   0 = BROADCAST (-23 LUFS target): threshold -12, ceiling -3, release 100 ms
+///   1 = STREAM    (-14 LUFS target): threshold -14, ceiling -1, release 60 ms
+/// (same drive as the old gain +6 / +12 presets; trim is reset to 0)
 - (void)applyLoudnessPreset:(int)preset;
 
 @end

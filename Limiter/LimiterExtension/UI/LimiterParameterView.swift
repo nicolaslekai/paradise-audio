@@ -1,21 +1,22 @@
 //
 //  LimiterParameterView.swift
 //
-//  Layout (researched against Pro-L 2 + the LUFS-meter UI conventions
-//  noted in the design docs):
+//  2026-11-21 redesign (Nicky: "limiter is too hard to understand… let's add a
+//  limiter channel fader, a compressor threshold and a proper audio signal
+//  preview"). Reads like a classic mastering limiter:
 //
-//   ┌──────────────────────────────────────────────────────────────────┐
-//   │  PARADISE AUDIO · LIMITER — LIM-1                                │
-//   ├──────────────────────────────────────────────────────────────────┤
-//   │  ╔════════════════════════════════════════════════════════════╗  │
-//   │  ║       SCROLLING WAVEFORM (post-limit, 2 s window)          ║  │
-//   │  ╚════════════════════════════════════════════════════════════╝  │
-//   │  ┌─────────────┐ ┌─────────────┐  ┌─────────────┐ ┌───────────┐  │
-//   │  │ SHORT-TERM  │ │ INTEGRATED  │  │  BROADCAST  │ │  STREAM   │  │
-//   │  │  −14.2 LUFS │ │  −15.1 LUFS │  │  −23 LUFS   │ │ −14 LUFS  │  │
-//   │  └─────────────┘ └─────────────┘  └─────────────┘ └───────────┘  │
-//   │     [GAIN]    [CEILING]    [RELEASE]                  IN | GR    │
-//   └──────────────────────────────────────────────────────────────────┘
+//   ┌ LIMITER · THRESHOLD · CEILING · RELEASE ────────────────────── ↶ ↷ ┐
+//   │ ┌ SIGNAL  ▪IN ▪OUT ▪GR ─────── LIVE / EXAMPLE ┐ ┌ IN THRESHOLD GR CEILING OUT ┐
+//   │ │ GR lane (red band from the top)             │ │ ▮  ═╪═      ▮   ═╪═      ▮  │
+//   │ │ input (cream) · output (red)                │ │ ▮   │       ▮  RELEASE   ▮  │
+//   │ │ – – threshold – –   —— ceiling ——           │ │ ▮   │       ▮   (knob)   ▮  │
+//   │ └─────────────────────────────────────────────┘ │                              │
+//   │ ┌ LOUDNESS  SHORT-TERM  INTEGRATED ↺  [BROADCAST][STREAM] ┐                   │
+//   ├ footer ─────────────────────────────────────────────────────────────────────┤
+//
+//  THRESHOLD and CEILING are long faders on one shared dB ruler with the input,
+//  gain-reduction and output meters. RELEASE stays a knob. LUFS readouts and the
+//  BROADCAST / STREAM target keys are a small secondary row.
 //
 
 import AppKit
@@ -25,281 +26,357 @@ final class LimiterParameterView: NSView {
 
     var audioUnit: LimiterAudioUnit? { didSet { rebind() } }
 
-    private let cream     = Palette.cream
-    private let panelBg   = Palette.panelDark
-    private let inkDark   = Palette.inkLight
-    private let inkMid    = Palette.inkMidL
-    private let accentRed = Palette.accentRed
-    private let faceBg    = Palette.faceBg
-    private let undoCtl   = ParamUndo()
+    static let size = NSSize(width: 800, height: 480)
+    private let ink = Palette.inkLight
+    private let mid = Palette.inkMidL
+    private let red = Palette.red
+    private let undoCtl = ParamUndo()
 
-    private var knobs: [KnobView] = []
+    // Geometry (flipped: y grows downward).
+    private let pad: CGFloat = 18, gap: CGFloat = 8, barH: CGFloat = 42
+    private let contentTop: CGFloat = 52
+    private var contentBottom: CGFloat { bounds.height - 44 }
+    private let stripW: CGFloat = 262
+
     private let waveform = WaveformView(frame: .zero)
-    private var meterTimer: Timer?
+    private let thrFader = FaderView(frame: .zero)
+    private let ceilFader = FaderView(frame: .zero)
+    private let inMeter = MeterView(frame: .zero)
+    private let grMeter = MeterView(frame: .zero)
+    private let outMeter = MeterView(frame: .zero)
+    private let lufsView = LoudnessReadout(frame: .zero)
+    private var releaseKnob: KnobView?
+    private var treeToken: AUParameterObserverToken?
 
-    // Latched meter values, refreshed at 30 Hz on the main thread.
-    private var grDB:    Float = 0
-    private var inPeakDB: Float = -60
-    private var stLUFS:   Float = -120
-    private var iLUFS:    Float = -120
+    // Tap reader state.
+    private var timer: Timer?
+    private var tapBuf = [Float](repeating: 0, count: 2048 * 5)
+    private var lastWrite: UInt32 = 0
+    private var lastAdvance = Date.distantPast
+    private var lastTick = Date()
+    private var inDB: Float = -120, outDB: Float = -120, grDB: Float = 0
+    private var inHold: Float = -120, outHold: Float = -120, grHold: Float = 0
+    private var inHoldAge = 0.0, outHoldAge = 0.0, grHoldAge = 0.0
 
-    // Hit rects, set during draw / consumed by mouseDown.
-    private var broadcastRect: NSRect = .zero
-    private var streamRect:    NSRect = .zero
-    private var iResetRect:    NSRect = .zero
+    // Hit rects for the secondary row (set in draw, recomputed in mouseDown).
+    private var broadcastRect = NSRect.zero, streamRect = NSRect.zero, resetRect = NSRect.zero
 
     override init(frame: NSRect) {
         super.init(frame: frame)
         wantsLayer = true
-        layer?.backgroundColor = faceBg.cgColor
-        layer?.drawsAsynchronously = true
-        addSubview(waveform)
-        startMeterTimer()
+        layer?.backgroundColor = Palette.faceBg.cgColor
+        thrFader.capKind = 1      // red: THE control that makes the effect
+        ceilFader.capKind = 2     // ivory: output class
+        inMeter.kind = .level; outMeter.kind = .level; grMeter.kind = .reduction
+        for v in [waveform, thrFader, ceilFader, inMeter, grMeter, outMeter, lufsView] as [NSView] { addSubview(v) }
     }
     required init?(coder: NSCoder) { super.init(coder: coder) }
-    deinit { meterTimer?.invalidate() }
-
-    private func startMeterTimer() {
-        meterTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 30.0, repeats: true) { [weak self] _ in
-            guard let self, let au = self.audioUnit else { return }
-            self.grDB     = au.currentGainReductionDB
-            self.inPeakDB = au.currentInputPeakDB
-            self.stLUFS   = au.shortTermLUFS
-            self.iLUFS    = au.integratedLUFS
-            self.needsDisplay = true
-        }
+    deinit {
+        timer?.invalidate()
+        if let t = treeToken { audioUnit?.parameterTree?.removeParameterObserver(t) }
     }
 
-    // MARK: - Layout
+    override var isFlipped: Bool { true }
+
+    // MARK: Geometry
+
+    private var stripRect: NSRect { NSRect(x: bounds.width - pad - stripW, y: contentTop, width: stripW, height: contentBottom - contentTop) }
+    private var loudRect: NSRect { NSRect(x: pad, y: contentBottom - 80, width: stripRect.minX - gap - pad, height: 80) }
+    private var waveRect: NSRect { NSRect(x: pad, y: contentTop, width: stripRect.minX - gap - pad, height: loudRect.minY - gap - contentTop) }
+    /// Shared ruler in this view's coordinates: 0 dB … −30 dB.
+    private var ruler: DBRuler { DBRuler(y0: stripRect.minY + 62, y1: stripRect.maxY - 30) }
+    // Column centres inside the strip.
+    private var xIn: CGFloat   { stripRect.minX + 19 }
+    private var xThr: CGFloat  { stripRect.minX + 75 }
+    private var xGR: CGFloat   { stripRect.minX + 131 }
+    private var xCeil: CGFloat { stripRect.minX + 187 }
+    private var xOut: CGFloat  { stripRect.minX + 243 }
+    private let meterW: CGFloat = 14, faderW: CGFloat = 50
 
     override func layout() {
         super.layout()
-        let pad: CGFloat       = 18
-        let footerH: CGFloat   = 36
-        let knobH: CGFloat     = 128
-        let knobW: CGFloat     = 86
-        let knobGap: CGFloat   = 18
-        let waveH: CGFloat     = 150
-        let lufsRowH: CGFloat  = 60
-
-        // Top: scrolling waveform fills the full panel width
-        let waveY = bounds.height - 40 - waveH
-        waveform.frame = NSRect(x: pad, y: waveY,
-                                 width: bounds.width - pad * 2,
-                                 height: waveH)
-
-        // Bottom: knob row (3 knobs, left-aligned) + reserve right side
-        // of the row for the IN/GR mini-meters drawn directly in draw().
-        let knobsY = footerH + 6
-        var x = pad
-        for k in knobs {
-            k.frame = NSRect(x: x, y: knobsY, width: knobW, height: knobH)
-            x += knobW + knobGap
+        waveform.frame = waveRect
+        let r = ruler
+        let oh = FaderView.overhang
+        thrFader.frame = NSRect(x: xThr - faderW / 2, y: r.y(0) - oh, width: faderW, height: r.y(-30) - r.y(0) + oh * 2)
+        ceilFader.frame = NSRect(x: xCeil - faderW / 2, y: r.y(0) - oh, width: faderW, height: r.y(-12) - r.y(0) + oh * 2)
+        for (m, x) in [(inMeter, xIn), (grMeter, xGR), (outMeter, xOut)] {
+            m.frame = NSRect(x: x - meterW / 2, y: r.y0 - 4, width: meterW, height: r.y1 - r.y0 + 8)
+            m.ruler = DBRuler(y0: 4, y1: 4 + r.y1 - r.y0)
         }
-        // LUFS row sits between the knobs and the waveform — drawn in
-        // draw() (no subviews; preset/LUFS panels are direct CG fills).
-        _ = lufsRowH
+        if let k = releaseKnob {
+            k.frame = NSRect(x: xCeil - 32, y: ceilFader.frame.maxY + 34, width: 64, height: 90)
+        }
+        let lr = loudRect
+        lufsView.frame = NSRect(x: lr.minX + 10, y: lr.minY + 24, width: 250, height: lr.height - 30)
     }
 
-    // MARK: - Drawing
+    // MARK: Binding
+
+    private func param(_ id: String) -> AUParameter? {
+        audioUnit?.parameterTree?.allParameters.first { $0.identifier == id }
+    }
+    private func value(_ id: String) -> Float { param(id)?.value ?? 0 }
+
+    private func rebind() {
+        releaseKnob?.removeFromSuperview(); releaseKnob = nil
+        if let t = treeToken { audioUnit?.parameterTree?.removeParameterObserver(t); treeToken = nil }
+        guard let au = audioUnit, let tree = au.parameterTree else { return }
+        undoCtl.attach(au)
+        undoCtl.onChange = { [weak self] in self?.needsDisplay = true }
+        if let p = param("threshold") { thrFader.bind(p, default: -2) }
+        if let p = param("ceiling") { ceilFader.bind(p, default: -1) }
+        if let p = param("release") {
+            let k = KnobView(frame: .zero)
+            k.bind(parameter: p)
+            k.title = "RELEASE"
+            k.displayFormatter = { String(format: "%.0f ms", $0) }
+            addSubview(k); releaseKnob = k
+        }
+        waveform.bucketSeconds = au.tapBucketSeconds
+        treeToken = tree.token(byAddingParameterObserver: { [weak self] _, _ in
+            DispatchQueue.main.async { self?.syncParams() }
+        })
+        syncParams()
+        needsLayout = true
+    }
+
+    /// Parameter-driven state: lines in the signal view, meter markers, keys, readouts.
+    private func syncParams() {
+        let t = value("threshold"), c = value("ceiling")
+        waveform.thresholdDB = t; waveform.ceilingDB = c
+        waveform.releaseMs = value("release"); waveform.trimDB = value("inputGain")
+        inMeter.hotAboveDB = t
+        needsDisplay = true
+    }
+
+    // MARK: Tap reader (≤ 30 fps, only while the editor is in a window)
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        timer?.invalidate(); timer = nil
+        guard window != nil else { return }
+        let t = Timer(timeInterval: 1.0 / 30.0, repeats: true) { [weak self] _ in self?.tick() }
+        RunLoop.main.add(t, forMode: .common); timer = t
+    }
+
+    private func tick() {
+        guard let au = audioUnit, window != nil, !isHiddenOrHasHiddenAncestor else { return }
+        let now = Date()
+        let dt = min(0.2, now.timeIntervalSince(lastTick)); lastTick = now
+        var w: UInt32 = 0
+        let cap = min(2048, waveform.columnCount + 8)
+        let n = Int(tapBuf.withUnsafeMutableBufferPointer { au.readTap(into: $0.baseAddress!, maxBuckets: Int32(cap), writeCount: &w) })
+        let fresh = Int(min(UInt32(n), w &- lastWrite))
+        if w != lastWrite { lastAdvance = now }
+        lastWrite = w
+
+        // Meters: peak of the buckets that arrived since the last tick.
+        var iPk: Float = 0, oPk: Float = 0, gPk: Float = 0
+        for i in (n - fresh)..<n where i >= 0 {
+            let p = i * 5
+            iPk = max(iPk, max(tapBuf[p], -tapBuf[p + 1]))
+            oPk = max(oPk, max(tapBuf[p + 2], -tapBuf[p + 3]))
+            gPk = max(gPk, tapBuf[p + 4])
+        }
+        let fall = Float(dt) * 26            // dB per second of meter fall-back
+        func ballistic(_ cur: inout Float, _ hold: inout Float, _ age: inout Double, _ new: Float) {
+            cur = max(new, cur - fall)
+            if new >= hold { hold = new; age = 0 } else { age += dt; if age > 1.5 { hold -= fall } }
+        }
+        ballistic(&inDB, &inHold, &inHoldAge, iPk > 1e-6 ? 20 * log10(iPk) : -120)
+        ballistic(&outDB, &outHold, &outHoldAge, oPk > 1e-6 ? 20 * log10(oPk) : -120)
+        // Gain reduction falls back towards 0 (it lives on the other side of the scale).
+        grDB = max(gPk, grDB - fall); if gPk >= grHold { grHold = gPk; grHoldAge = 0 } else { grHoldAge += dt; if grHoldAge > 1.5 { grHold = max(0, grHold - fall) } }
+        inMeter.db = inDB; inMeter.holdDB = inHold
+        outMeter.db = outDB; outMeter.holdDB = outHold
+        grMeter.db = grDB; grMeter.holdDB = grHold
+
+        // Signal view: live while there is any audio in the visible window and
+        // the host keeps rendering; otherwise the labelled example.
+        var any = false
+        for i in 0..<n where max(tapBuf[i * 5], -tapBuf[i * 5 + 1], tapBuf[i * 5 + 2], -tapBuf[i * 5 + 3]) > 1e-4 { any = true; break }
+        let live = any && now.timeIntervalSince(lastAdvance) < 1.0
+        tapBuf.withUnsafeBufferPointer { waveform.setLive(live, data: $0.baseAddress, count: n) }
+
+        lufsView.update(short: au.shortTermLUFS, integrated: au.integratedLUFS)
+        setNeedsDisplay(stripReadoutRect)
+    }
+
+    /// The meter peak numbers under the strip are drawn by this view.
+    private var stripReadoutRect: NSRect { NSRect(x: stripRect.minX, y: ruler.y1 + 4, width: stripW, height: stripRect.maxY - ruler.y1 - 4) }
+
+    // MARK: Drawing
 
     override func draw(_ dirtyRect: NSRect) {
         guard let ctx = NSGraphicsContext.current?.cgContext else { return }
-        // Subtle brushed-aluminium faceplate (keeps panel colour, adds analogue grain).
         FaceTexture.draw(in: bounds, ctx: ctx)
+        drawTopBar(ctx)
+        drawStrip(ctx)
+        drawLoudness(ctx)
+        drawFooter(ctx)
+    }
+
+    private func drawTopBar(_ ctx: CGContext) {
+        let bar = NSRect(x: 0, y: 0, width: bounds.width, height: barH)
+        ctx.setFillColor(Palette.wellBg.cgColor); ctx.fill(bar)
+        ctx.setFillColor(red.cgColor); ctx.fill(NSRect(x: 0, y: barH - 2, width: bounds.width, height: 2))
+        let t: [NSAttributedString.Key: Any] = [.font: Palette.printFontCondensed(20), .foregroundColor: ink, .kern: 1.6]
+        let ts = NSString(string: "LIMITER"); let tz = ts.size(withAttributes: t)
+        ts.draw(at: NSPoint(x: pad, y: (barH - 2 - tz.height) * 0.5 + 1), withAttributes: t)
+        let s: [NSAttributedString.Key: Any] = [.font: Palette.printFont(9), .foregroundColor: mid, .kern: 0.8]
+        let ss = NSString(string: "PULL THE THRESHOLD DOWN = MORE LIMITING, LOUDER · OUTPUT NEVER PASSES THE CEILING")
+        let sz = ss.size(withAttributes: s)
+        ss.draw(at: NSPoint(x: pad + tz.width + 14, y: (barH - 2 - sz.height) * 0.5 + 1), withAttributes: s)
+        undoCtl.draw(in: bounds, ctx: ctx, ink: ink, mid: mid, pad: pad, y: (barH - 2 - 16) * 0.5)
+    }
+
+    private func section(_ ctx: CGContext, _ r: NSRect) {
+        let path = CGPath(roundedRect: r, cornerWidth: 4, cornerHeight: 4, transform: nil)
+        ctx.setFillColor(Palette.panelDark.cgColor); ctx.addPath(path); ctx.fillPath()
+        ctx.setStrokeColor(ink.withAlphaComponent(0.22).cgColor); ctx.setLineWidth(0.5); ctx.addPath(path); ctx.strokePath()
+    }
+
+    private func centred(_ s: String, _ x: CGFloat, _ y: CGFloat, _ a: [NSAttributedString.Key: Any]) {
+        let ns = NSString(string: s); let z = ns.size(withAttributes: a)
+        ns.draw(at: NSPoint(x: (x - z.width * 0.5).rounded(), y: y), withAttributes: a)
+    }
+
+    private func dbText(_ v: Float) -> String {
+        abs(v) < 0.05 ? "0.0 dB" : String(format: "−%.1f dB", Double(-v)).replacingOccurrences(of: "−-", with: "+")
+    }
+
+    private func drawStrip(_ ctx: CGContext) {
+        let s = stripRect
+        section(ctx, s)
+        let r = ruler
+        let label: [NSAttributedString.Key: Any] = [.font: Palette.printFontCondensed(13), .foregroundColor: ink, .kern: 0.8]
+        let small: [NSAttributedString.Key: Any] = [.font: Palette.printFontCondensed(11), .foregroundColor: mid, .kern: 0.8]
+        let valA: [NSAttributedString.Key: Any] = [.font: Palette.printFont(11), .foregroundColor: ink, .kern: 0.3]
+        centred("IN", xIn, s.minY + 10, small)
+        centred("GR", xGR, s.minY + 10, small)
+        centred("OUT", xOut, s.minY + 10, small)
+        centred("THRESHOLD", xThr, s.minY + 9, label)
+        centred("CEILING", xCeil, s.minY + 9, label)
+        let t = value("threshold"), c = value("ceiling"), trim = value("inputGain")
+        centred(dbText(t), xThr, s.minY + 27, valA)
+        centred(dbText(c), xCeil, s.minY + 27, valA)
+        if abs(trim) >= 0.05 {
+            // Input trim (old sessions / automation) — shown under IN only when it is in use.
+            let a: [NSAttributedString.Key: Any] = [.font: Palette.printFont(7.5), .foregroundColor: mid, .kern: 0.4]
+            centred("TRIM", xIn, s.minY + 28, a)
+            centred(String(format: "%+.1f", Double(trim)).replacingOccurrences(of: "-", with: "−"), xIn, s.minY + 38, a)
+        }
+
+        // Shared dB scale: numbers between IN and THRESHOLD, and right of OUT.
+        let num: [NSAttributedString.Key: Any] = [.font: NSFont.monospacedDigitSystemFont(ofSize: 7.5, weight: .medium), .foregroundColor: mid]
+        for db in stride(from: 0, through: -30, by: -3) {
+            let y = r.y(Float(db)) - 5
+            let str = NSString(string: db == 0 ? "0" : "\(-db)")
+            let z = str.size(withAttributes: num)
+            str.draw(at: NSPoint(x: xThr - faderW / 2 - z.width + 2, y: y), withAttributes: num)
+            str.draw(at: NSPoint(x: xOut + meterW / 2 + 4, y: y), withAttributes: num)
+        }
+
+        // Meter peak readouts under the meters.
+        let pk: [NSAttributedString.Key: Any] = [.font: NSFont.monospacedDigitSystemFont(ofSize: 8, weight: .semibold), .foregroundColor: ink]
+        func peakText(_ v: Float) -> String { v <= -60 ? "−∞" : String(format: v > 0.05 ? "%+.1f" : "%.1f", Double(v)).replacingOccurrences(of: "-", with: "−") }
+        let y = r.y1 + 10
+        centred(peakText(inHold), xIn, y, pk)
+        centred(grHold < 0.05 ? "0.0" : String(format: "−%.1f", Double(grHold)), xGR, y, grHold > 0.05 ? pk.merging([.foregroundColor: red]) { $1 } : pk)
+        centred(peakText(outHold), xOut, y, pk)
+
+        // Reference notches: threshold beside the input meter, ceiling beside the output meter.
+        func notch(_ x: CGFloat, _ db: Float, pointingRight: Bool) {
+            let yy = r.y(db), d: CGFloat = pointingRight ? 1 : -1
+            ctx.setFillColor(ink.cgColor)
+            ctx.move(to: NSPoint(x: x, y: yy)); ctx.addLine(to: NSPoint(x: x - d * 5, y: yy - 3.5))
+            ctx.addLine(to: NSPoint(x: x - d * 5, y: yy + 3.5)); ctx.closePath(); ctx.fillPath()
+        }
+        notch(xIn - meterW / 2 - 1, t, pointingRight: true)
+        notch(xOut - meterW / 2 - 1, c, pointingRight: true)
+    }
+
+    private func drawLoudness(_ ctx: CGContext) {
+        let r = loudRect
+        section(ctx, r)
+        let h: [NSAttributedString.Key: Any] = [.font: Palette.printFontCondensed(12), .foregroundColor: mid, .kern: 0.8]
+        NSString(string: "LOUDNESS · BS.1770").draw(at: NSPoint(x: r.minX + 10, y: r.minY + 6), withAttributes: h)
+
+        // ↺ reset for the integrated value, next to the readouts.
+        let ra: [NSAttributedString.Key: Any] = [.font: Palette.printFont(8), .foregroundColor: ink, .kern: 0.5]
+        resetRect = NSRect(x: r.minX + 10 + 124 + 66, y: r.minY + 27, width: 56, height: 17)
+        ButtonTex.draw(ctx, rect: resetRect, active: false)
+        centred("↺ RESET", resetRect.midX, resetRect.minY + 4, ra)
+
+        // Target keys — secondary: small, at the right of the row.
+        let kw: CGFloat = 78, kh: CGFloat = 36
+        streamRect = NSRect(x: r.maxX - 10 - kw, y: r.minY + 34, width: kw, height: kh)
+        broadcastRect = NSRect(x: streamRect.minX - 6 - kw, y: streamRect.minY, width: kw, height: kh)
+        NSString(string: "TARGET").draw(at: NSPoint(x: broadcastRect.minX, y: r.minY + 9),
+                                         withAttributes: [.font: Palette.printFont(7.5), .foregroundColor: mid, .kern: 0.8])
+        let t = value("threshold"), c = value("ceiling"), rel = value("release"), g = value("inputGain")
+        func near(_ a: Float, _ b: Float) -> Bool { abs(a - b) < 0.05 }
+        let bcOn = near(t, -12) && near(c, -3) && near(rel, 100) && near(g, 0)
+        let stOn = near(t, -14) && near(c, -1) && near(rel, 60) && near(g, 0)
+        for (rect, title, sub, on) in [(broadcastRect, "BROADCAST", "−23 LUFS", bcOn), (streamRect, "STREAM", "−14 LUFS", stOn)] {
+            ButtonTex.draw(ctx, rect: rect, active: on)
+            let ta: [NSAttributedString.Key: Any] = [.font: Palette.printFontCondensed(11), .foregroundColor: ink, .kern: 0.8]
+            let sa: [NSAttributedString.Key: Any] = [.font: Palette.printFont(7.5), .foregroundColor: on ? ink : mid, .kern: 0.4]
+            centred(title, rect.midX, rect.minY + 7, ta)
+            centred(sub, rect.midX, rect.minY + 20, sa)
+        }
+    }
+
+    private func drawFooter(_ ctx: CGContext) {
         let b = bounds
-
-        // Brand strip — same as every Paradise plug-in
-        ctx.setFillColor(accentRed.cgColor)
-        BrandLogo.draw(in: NSRect(x: 12, y: 2, width: 30, height: 30), ctx: ctx)
-        let brand: [NSAttributedString.Key: Any] = [
-            .font: Palette.printFontCondensed(11),
-            .foregroundColor: inkDark, .kern: 1.2
-        ]
-        NSString(string: "PARADISE AUDIO").draw(at: NSPoint(x: 46, y: 15), withAttributes: brand)
-        let sub: [NSAttributedString.Key: Any] = [
-            .font: Palette.printFont(7.5),
-            .foregroundColor: inkMid, .kern: 0.6
-        ]
-        NSString(string: "LIMITER — LIM-1").draw(at: NSPoint(x: 46, y: 4), withAttributes: sub)
-        ctx.setStrokeColor(inkDark.withAlphaComponent(0.25).cgColor); ctx.setLineWidth(0.5)
-        ctx.move(to: NSPoint(x: 16, y: 36)); ctx.addLine(to: NSPoint(x: b.width - 16, y: 36))
-        ctx.strokePath()
-
-        // Tag in top-right
-        let tag: [NSAttributedString.Key: Any] = [
-            .font: NSFont.monospacedSystemFont(ofSize: 7, weight: .regular),
-            .foregroundColor: inkMid, .kern: 0.5
-        ]
-        let tagStr = NSString(string: "AU v3 · STEREO · BS.1770")
-        let tw = tagStr.size(withAttributes: tag)
-        tagStr.draw(at: NSPoint(x: b.width - tw.width - 16, y: b.height - 14), withAttributes: tag)
-
-        // ── LUFS row + preset buttons (between knobs and waveform) ─────
-        let lufsRowY     = waveform.frame.minY - 70
-        let lufsRowH: CGFloat = 60
-        let lufsPanelW: CGFloat = 130
-        let presetW:    CGFloat = 110
-        let gap: CGFloat = 8
-
-        // Two LUFS readout panels on the left
-        let stRect = NSRect(x: 18,                      y: lufsRowY, width: lufsPanelW, height: lufsRowH)
-        let iRect  = NSRect(x: stRect.maxX + gap,       y: lufsRowY, width: lufsPanelW, height: lufsRowH)
-        drawLufsReadout(ctx, rect: stRect, title: "SHORT-TERM (3s)", lufs: stLUFS, gateActive: false)
-        drawLufsReadout(ctx, rect: iRect,  title: "INTEGRATED",      lufs: iLUFS,  gateActive: true)
-        // "I RESET" tap zone — narrow strip below the integrated panel
-        let resetStr = NSString(string: "↺ RESET I")
-        let resetAttr: [NSAttributedString.Key: Any] = [
-            .font: NSFont.monospacedSystemFont(ofSize: 8, weight: .heavy),
-            .foregroundColor: accentRed, .kern: 0.5
-        ]
-        let rsz = resetStr.size(withAttributes: resetAttr)
-        iResetRect = NSRect(x: iRect.maxX - rsz.width - 6, y: iRect.maxY - rsz.height - 4,
-                             width: rsz.width + 4, height: rsz.height + 2)
-        resetStr.draw(at: NSPoint(x: iResetRect.minX + 2, y: iResetRect.minY + 1), withAttributes: resetAttr)
-
-        // Two LUFS preset buttons on the right of the LUFS row
-        broadcastRect = NSRect(x: b.width - 18 - presetW * 2 - gap, y: lufsRowY,
-                                width: presetW, height: lufsRowH)
-        streamRect    = NSRect(x: b.width - 18 - presetW,           y: lufsRowY,
-                                width: presetW, height: lufsRowH)
-        drawPresetButton(ctx, rect: broadcastRect, title: "BROADCAST", subtitle: "−23 LUFS")
-        drawPresetButton(ctx, rect: streamRect,    title: "STREAM",    subtitle: "−14 LUFS")
-
-        // ── Right-edge mini-meters (IN + GR) over the knob row ────────
-        let metersX = b.width - 18 - 60
-        let metersY: CGFloat = 36 + 6
-        let metersH: CGFloat = 96
-        let mW: CGFloat = 24
-        let inMRect = NSRect(x: metersX,            y: metersY, width: mW, height: metersH)
-        let grMRect = NSRect(x: metersX + mW + 8,   y: metersY, width: mW, height: metersH)
-        drawMiniMeter(ctx, rect: inMRect, label: "IN",
-                      frac: max(0, min(1, CGFloat((inPeakDB + 60) / 60))),
-                      colour: NSColor(calibratedRed: 0.10, green: 0.65, blue: 0.30, alpha: 0.9),
-                      anchorBottom: true)
-        drawMiniMeter(ctx, rect: grMRect, label: "GR",
-                      frac: max(0, min(1, CGFloat(grDB / 20))),
-                      colour: accentRed, anchorBottom: false)
-
-        // Undo / redo — top-right, just under the spec tag.
-        undoCtl.draw(in: b, ctx: ctx, ink: inkDark, mid: inkMid, pad: 16, y: b.height - 30)
-        // SAVE / LOAD named presets — header strip, clear of brand + spec tag
-        // (LUFS row + BROADCAST/STREAM plates occupy the area above the knobs).
+        let y = b.height - 36
+        ctx.setStrokeColor(ink.withAlphaComponent(0.25).cgColor); ctx.setLineWidth(0.5)
+        ctx.move(to: CGPoint(x: 16, y: y)); ctx.addLine(to: CGPoint(x: b.width - 16, y: y)); ctx.strokePath()
+        BrandLogo.draw(in: NSRect(x: 14, y: y + 3, width: 30, height: 30), ctx: ctx)
+        let aBrand: [NSAttributedString.Key: Any] = [.font: Palette.printFontCondensed(11), .foregroundColor: ink, .kern: 1.2]
+        NSString(string: "PARADISE AUDIO").draw(at: NSPoint(x: 50, y: y + 5), withAttributes: aBrand)
+        let aSub: [NSAttributedString.Key: Any] = [.font: Palette.printFont(7.5), .foregroundColor: mid, .kern: 0.6]
+        NSString(string: "LIMITER — LIM-1").draw(at: NSPoint(x: 50, y: y + 19), withAttributes: aSub)
+        let aSpec: [NSAttributedString.Key: Any] = [.font: NSFont.monospacedSystemFont(ofSize: 7, weight: .regular), .foregroundColor: mid, .kern: 0.5]
+        let spec = NSString(string: "AU v3 · STEREO · LOOKAHEAD 5 ms · BS.1770")
+        let sz = spec.size(withAttributes: aSpec)
+        spec.draw(at: NSPoint(x: b.width - 16 - sz.width, y: y + 13), withAttributes: aSpec)
     }
 
-    private func drawLufsReadout(_ ctx: CGContext, rect r: NSRect, title: String, lufs: Float, gateActive: Bool) {
-        // Panel fill
-        ctx.setFillColor(panelBg.cgColor); ctx.fill(r); PanelTex.draw(in: r, ctx: ctx)
-        ctx.setStrokeColor(inkDark.withAlphaComponent(0.55).cgColor); ctx.setLineWidth(0.6); ctx.stroke(r)
-        // Title
-        let titleAttr: [NSAttributedString.Key: Any] = [
-            .font: NSFont.monospacedSystemFont(ofSize: 7, weight: .semibold),
-            .foregroundColor: inkMid, .kern: 0.6
-        ]
-        NSString(string: title).draw(at: NSPoint(x: r.minX + 8, y: r.maxY - 13), withAttributes: titleAttr)
-        // Big numeric LUFS readout
-        let val = lufs <= -119.0
-            ? "—"
-            : String(format: "%+.1f", Double(lufs))
-        let valAttr: [NSAttributedString.Key: Any] = [
-            .font: NSFont.monospacedDigitSystemFont(ofSize: 22, weight: .heavy),
-            .foregroundColor: inkDark, .kern: 0.6
-        ]
-        let vstr = NSString(string: val)
-        let vsz  = vstr.size(withAttributes: valAttr)
-        vstr.draw(at: NSPoint(x: r.minX + 8, y: r.midY - 14), withAttributes: valAttr)
-        // "LUFS" unit, smaller, to the right of the number
-        let unitAttr: [NSAttributedString.Key: Any] = [
-            .font: NSFont.monospacedSystemFont(ofSize: 8, weight: .heavy),
-            .foregroundColor: inkMid, .kern: 1.0
-        ]
-        NSString(string: "LUFS").draw(at: NSPoint(x: r.minX + 12 + vsz.width, y: r.midY - 4),
-                                       withAttributes: unitAttr)
-        if gateActive {
-            // Tiny gating-active pip
-            ctx.setFillColor(accentRed.cgColor)
-            ctx.fillEllipse(in: NSRect(x: r.maxX - 10, y: r.minY + 4, width: 4, height: 4))
-        }
-    }
-
-    private func drawPresetButton(_ ctx: CGContext, rect r: NSRect, title: String, subtitle: String) {
-        // Light preset plate (DESIGN.md §5) — matches Delay/VoiceBox/Compressor.
-        // Was a dark near-black gradient that read as two heavy blocks on an
-        // otherwise light face; now a soft white plate with a red outline.
-        if !ButtonTex.draw(ctx, rect: r, active: false, corner: 4) {
-            ctx.setFillColor(NSColor.white.withAlphaComponent(0.6).cgColor); ctx.fill(r)
-            ctx.setStrokeColor(accentRed.cgColor); ctx.setLineWidth(1.2); ctx.stroke(r)
-        }
-        ctx.setFillColor(accentRed.cgColor); ctx.fill(NSRect(x: r.minX + 5, y: r.maxY - 9, width: 4, height: 4))
-        let titleAttr: [NSAttributedString.Key: Any] = [
-            .font: NSFont.systemFont(ofSize: 12, weight: .heavy),
-            .foregroundColor: inkDark, .kern: 1.4
-        ]
-        let subAttr: [NSAttributedString.Key: Any] = [
-            .font: NSFont.monospacedSystemFont(ofSize: 9, weight: .semibold),
-            .foregroundColor: accentRed, .kern: 0.6
-        ]
-        let t = NSString(string: title); let ts = t.size(withAttributes: titleAttr)
-        let s = NSString(string: subtitle); let ss = s.size(withAttributes: subAttr)
-        t.draw(at: NSPoint(x: r.midX - ts.width * 0.5, y: r.midY - 2), withAttributes: titleAttr)
-        s.draw(at: NSPoint(x: r.midX - ss.width * 0.5, y: r.midY - ss.height - 4), withAttributes: subAttr)
-    }
-
-    private func drawMiniMeter(_ ctx: CGContext, rect r: NSRect, label: String,
-                                frac: CGFloat, colour: NSColor, anchorBottom: Bool) {
-        ctx.setFillColor(panelBg.cgColor); ctx.fill(r); PanelTex.draw(in: r, ctx: ctx)
-        ctx.setStrokeColor(inkDark.withAlphaComponent(0.6).cgColor); ctx.setLineWidth(0.5); ctx.stroke(r)
-        let h = r.height * frac
-        let fill = anchorBottom
-            ? NSRect(x: r.minX, y: r.minY, width: r.width, height: h)
-            : NSRect(x: r.minX, y: r.maxY - h, width: r.width, height: h)
-        ctx.setFillColor(colour.cgColor); ctx.fill(fill)
-        // Label below the meter
-        let attr: [NSAttributedString.Key: Any] = [
-            .font: NSFont.monospacedSystemFont(ofSize: 7, weight: .heavy),
-            .foregroundColor: inkDark, .kern: 0.7
-        ]
-        let s = NSString(string: label); let sz = s.size(withAttributes: attr)
-        s.draw(at: NSPoint(x: r.midX - sz.width * 0.5, y: r.minY - 11), withAttributes: attr)
-    }
-
-    // MARK: - Mouse
+    // MARK: Mouse
 
     override func mouseDown(with event: NSEvent) {
         let p = convert(event.locationInWindow, from: nil)
         if undoCtl.handleClick(p) { needsDisplay = true; return }
-        // Recompute the preset rects from live geometry rather than trusting
-        // the draw-time copies — guards against stale rects if layout moved the
-        // spectrum after the last draw (the preset-click regression).
-        let lufsRowY = waveform.frame.minY - 70
-        let lufsRowH: CGFloat = 60, presetW: CGFloat = 110, gap: CGFloat = 8
-        let bc = NSRect(x: bounds.width - 18 - presetW * 2 - gap, y: lufsRowY, width: presetW, height: lufsRowH)
-        let st = NSRect(x: bounds.width - 18 - presetW,           y: lufsRowY, width: presetW, height: lufsRowH)
-        if bc.contains(p)         { audioUnit?.applyLoudnessPreset(0); needsDisplay = true; return }
-        if st.contains(p)         { audioUnit?.applyLoudnessPreset(1); needsDisplay = true; return }
-        if iResetRect.contains(p) { audioUnit?.resetIntegrated();      needsDisplay = true; return }
+        if broadcastRect.contains(p) { audioUnit?.applyLoudnessPreset(0); needsDisplay = true; return }
+        if streamRect.contains(p)    { audioUnit?.applyLoudnessPreset(1); needsDisplay = true; return }
+        if resetRect.contains(p)     { audioUnit?.resetIntegrated(); return }
         super.mouseDown(with: event)
     }
+}
 
-    // MARK: - Param binding
+/// SHORT-TERM + INTEGRATED LUFS numbers (redrawn only when they change by 0.1).
+final class LoudnessReadout: NSView {
+    private var st: Float = -120, il: Float = -120
+    override var isFlipped: Bool { true }
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
 
-    private func rebind() {
-        knobs.forEach { $0.removeFromSuperview() }; knobs.removeAll()
-        guard let au = audioUnit, let tree = au.parameterTree else { return }
-        waveform.audioUnit = au
-        undoCtl.attach(au)
-        undoCtl.onChange = { [weak self] in self?.needsDisplay = true }
-        for param in tree.allParameters {
-            let k = KnobView(frame: .zero)
-            k.bind(parameter: param)
-            switch param.identifier {
-            case "inputGain": k.displayFormatter = { String(format: "%+.1f dB", $0) }
-            case "ceiling":   k.displayFormatter = { String(format: "%+.1f dB", $0) }
-            case "release":   k.displayFormatter = { String(format: "%.0f ms", $0) }
-            default: break
-            }
-            addSubview(k); knobs.append(k)
+    func update(short: Float, integrated: Float) {
+        let a = (short * 10).rounded() / 10, b = (integrated * 10).rounded() / 10
+        if a != st || b != il { st = a; il = b; needsDisplay = true }
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        let cap: [NSAttributedString.Key: Any] = [.font: Palette.printFont(7.5), .foregroundColor: Palette.inkMidL, .kern: 0.8]
+        let num: [NSAttributedString.Key: Any] = [.font: Palette.printFont(20), .foregroundColor: Palette.inkLight, .kern: 0.4]
+        let unit: [NSAttributedString.Key: Any] = [.font: Palette.printFont(8), .foregroundColor: Palette.inkMidL, .kern: 0.6]
+        for (i, (title, v)) in [("SHORT-TERM 3 s", st), ("INTEGRATED", il)].enumerated() {
+            let x = CGFloat(i) * 124
+            NSString(string: title).draw(at: NSPoint(x: x, y: 0), withAttributes: cap)
+            let s = NSString(string: v <= -119 ? "—" : String(format: "%.1f", Double(v)).replacingOccurrences(of: "-", with: "−"))
+            s.draw(at: NSPoint(x: x, y: 13), withAttributes: num)
+            NSString(string: "LUFS").draw(at: NSPoint(x: x + s.size(withAttributes: num).width + 5, y: 22), withAttributes: unit)
         }
-        needsLayout = true; needsDisplay = true
     }
 }

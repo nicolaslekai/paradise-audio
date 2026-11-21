@@ -11,11 +11,11 @@ public class AudioUnitViewController: AUViewController, AUAudioUnitFactory {
     // The size is known without building the view, so a host can ask for it early.
     public override init(nibName nibNameOrNil: NSNib.Name?, bundle nibBundleOrNil: Bundle?) {
         super.init(nibName: nibNameOrNil, bundle: nibBundleOrNil)
-        preferredContentSize = NSSize(width: 720, height: 440)
+        preferredContentSize = LimiterParameterView.size
     }
     public required init?(coder: NSCoder) {
         super.init(coder: coder)
-        preferredContentSize = NSSize(width: 720, height: 440)
+        preferredContentSize = LimiterParameterView.size
     }
 
     public override func viewDidLoad() {
@@ -68,8 +68,8 @@ public class AudioUnitViewController: AUViewController, AUAudioUnitFactory {
     }
 
     public override func loadView() {
-        view = LimiterParameterView(frame: NSRect(x: 0, y: 0, width: 720, height: 440))
-        preferredContentSize = NSSize(width: 720, height: 440)
+        view = LimiterParameterView(frame: NSRect(origin: .zero, size: LimiterParameterView.size))
+        preferredContentSize = LimiterParameterView.size
     }
     public func createAudioUnit(with componentDescription: AudioComponentDescription) throws -> AUAudioUnit {
         let au = try LimiterAudioUnit(componentDescription: componentDescription, options: [])

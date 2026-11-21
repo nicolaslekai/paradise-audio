@@ -17,7 +17,15 @@ enum : AUParameterAddress {
     kParamInputGain = 0,
     kParamCeiling   = 1,
     kParamRelease   = 2,
+    kParamThreshold = 3,   // 2026-11-21 — new address; 0–2 keep their meaning
 };
+
+// Old sessions (before the THRESHOLD parameter) had drive = gain − ceiling.
+// The new drive is gain + ceiling − threshold, so threshold = 2 × ceiling − gain
+// with gain folded to 0 reproduces them exactly; whatever the threshold range
+// cannot hold stays in the (now secondary) input trim.
+static NSString * const kStateModelKey = @"paradiseLimiterModel";   // 2 = threshold model
+static constexpr float kThrMin = -30.0f, kThrMax = 0.0f;
 
 // FFT ring-buffer constants — identical to the EQ's spectrum probe.
 static constexpr int kRingSize = 2048;
@@ -37,7 +45,7 @@ static constexpr int kFFTBins  = kFFTSize / 2;
     AUAudioUnitBus *_inBus;
     AUAudioUnitBus *_outBus;
     AVAudioFormat  *_format;
-    std::atomic<float> _gain, _ceil, _release;
+    std::atomic<float> _gain, _ceil, _release, _thr;
 
     // Spectrum probe — render thread writes _ring, UI thread reads via FFT.
     float              _ring[kRingSize];
@@ -93,6 +101,33 @@ static constexpr int kFFTBins  = kFFTSize / 2;
 - (int)readWaveformInto:(float *)out count:(int)n {
     return _dsp ? _dsp->readWaveformLast(out, n) : 0;
 }
+- (int)readTapInto:(float *)out maxBuckets:(int)n writeCount:(uint32_t *)writeCount {
+    return _dsp ? _dsp->readTap(out, n, writeCount) : 0;
+}
+- (double)tapBucketSeconds { return _dsp ? _dsp->tapBucketSeconds() : 0.006; }
+
+#pragma mark - State (old-session migration)
+
+- (NSDictionary<NSString *, id> *)fullState {
+    NSMutableDictionary *d = [[super fullState] mutableCopy] ?: [NSMutableDictionary dictionary];
+    d[kStateModelKey] = @2;
+    return d;
+}
+
+- (void)setFullState:(NSDictionary<NSString *, id> *)fullState {
+    [super setFullState:fullState];
+    if (fullState == nil || [fullState[kStateModelKey] integerValue] >= 2) return;
+    // Saved before THRESHOLD existed: fold the old drive into the threshold.
+    AUParameter *gainP = [_parameterTree parameterWithAddress:kParamInputGain];
+    AUParameter *ceilP = [_parameterTree parameterWithAddress:kParamCeiling];
+    AUParameter *thrP  = [_parameterTree parameterWithAddress:kParamThreshold];
+    if (!gainP || !ceilP || !thrP) return;
+    const float g = gainP.value, c = ceilP.value;
+    const float want = 2.0f * c - g;
+    const float thr  = std::max(kThrMin, std::min(kThrMax, want));
+    [thrP  setValue:thr originator:nil];
+    [gainP setValue:(thr - want) originator:nil];   // 0 unless the threshold had to clamp
+}
 
 - (void)dealloc {
     if (_fftSetup) vDSP_destroy_fftsetup(_fftSetup);
@@ -138,18 +173,22 @@ static constexpr int kFFTBins  = kFFTSize / 2;
     AUParameter *gainP = [_parameterTree parameterWithAddress:kParamInputGain];
     AUParameter *ceilP = [_parameterTree parameterWithAddress:kParamCeiling];
     AUParameter *relP  = [_parameterTree parameterWithAddress:kParamRelease];
-    if (!gainP || !ceilP || !relP) return;
+    AUParameter *thrP  = [_parameterTree parameterWithAddress:kParamThreshold];
+    if (!gainP || !ceilP || !relP || !thrP) return;
+    // Same drive as the old presets (gain − ceiling), now as a threshold.
     switch (preset) {
-        case 0:  // BROADCAST (-23 LUFS) — gentler drive, longer release
-            [gainP setValue:6.0f  originator:nil];
-            [ceilP setValue:-3.0f originator:nil];
-            [relP  setValue:100.0f originator:nil];
+        case 0:  // BROADCAST (-23 LUFS) — gentler drive (9 dB), longer release
+            [gainP setValue:0.0f    originator:nil];
+            [thrP  setValue:-12.0f  originator:nil];
+            [ceilP setValue:-3.0f   originator:nil];
+            [relP  setValue:100.0f  originator:nil];
             break;
-        case 1:  // STREAM (-14 LUFS) — harder drive, tighter release
+        case 1:  // STREAM (-14 LUFS) — harder drive (13 dB), tighter release
         default:
-            [gainP setValue:12.0f originator:nil];
-            [ceilP setValue:-1.0f originator:nil];
-            [relP  setValue:60.0f  originator:nil];
+            [gainP setValue:0.0f    originator:nil];
+            [thrP  setValue:-14.0f  originator:nil];
+            [ceilP setValue:-1.0f   originator:nil];
+            [relP  setValue:60.0f   originator:nil];
             break;
     }
 }
@@ -158,8 +197,15 @@ static constexpr int kFFTBins  = kFFTSize / 2;
     AudioUnitParameterUnit dB = kAudioUnitParameterUnit_Decibels;
     AudioUnitParameterUnit ms = kAudioUnitParameterUnit_Milliseconds;
 
+    AUParameter *pThr = [AUParameterTree createParameterWithIdentifier:@"threshold"
+        name:@"Threshold" address:kParamThreshold min:kThrMin max:kThrMax unit:dB unitName:nil flags:(kAudioUnitParameterFlag_IsReadable | kAudioUnitParameterFlag_IsWritable)
+        valueStrings:nil dependentParameters:nil];
+    pThr.value = -2.0f;   // = 2 × default ceiling: the old default sound
+
+    // Input Gain is now a secondary trim (old sessions are folded into the
+    // threshold on load, so it normally sits at 0). Identifier unchanged.
     AUParameter *pGain = [AUParameterTree createParameterWithIdentifier:@"inputGain"
-        name:@"Input Gain" address:kParamInputGain min:-12.0f max:24.0f unit:dB unitName:nil flags:(kAudioUnitParameterFlag_IsReadable | kAudioUnitParameterFlag_IsWritable)
+        name:@"Input Trim" address:kParamInputGain min:-12.0f max:24.0f unit:dB unitName:nil flags:(kAudioUnitParameterFlag_IsReadable | kAudioUnitParameterFlag_IsWritable)
         valueStrings:nil dependentParameters:nil];
     pGain.value = 0.0f;
 
@@ -173,9 +219,9 @@ static constexpr int kFFTBins  = kFFTSize / 2;
         valueStrings:nil dependentParameters:nil];
     pRel.value = 80.0f;
 
-    _parameterTree = [AUParameterTree createTreeWithChildren:@[pGain, pCeil, pRel]];
+    _parameterTree = [AUParameterTree createTreeWithChildren:@[pThr, pCeil, pRel, pGain]];
 
-    _gain.store(0.0f); _ceil.store(-1.0f); _release.store(80.0f);
+    _gain.store(0.0f); _ceil.store(-1.0f); _release.store(80.0f); _thr.store(-2.0f);
 
     __weak LimiterAudioUnit *weakSelf = self;
     _parameterTree.implementorValueObserver = ^(AUParameter *param, AUValue value) {
@@ -184,6 +230,7 @@ static constexpr int kFFTBins  = kFFTSize / 2;
             case kParamInputGain: s->_gain.store(value);    break;
             case kParamCeiling:   s->_ceil.store(value);    break;
             case kParamRelease:   s->_release.store(value); break;
+            case kParamThreshold: s->_thr.store(value);     break;
         }
     };
     _parameterTree.implementorValueProvider = ^AUValue(AUParameter *param) {
@@ -192,6 +239,7 @@ static constexpr int kFFTBins  = kFFTSize / 2;
             case kParamInputGain: return s->_gain.load();
             case kParamCeiling:   return s->_ceil.load();
             case kParamRelease:   return s->_release.load();
+            case kParamThreshold: return s->_thr.load();
         }
         return 0;
     };
@@ -200,6 +248,7 @@ static constexpr int kFFTBins  = kFFTSize / 2;
         switch (param.address) {
             case kParamInputGain:
             case kParamCeiling:
+            case kParamThreshold:
                 return [NSString stringWithFormat:@"%+.1f dB", v];
             case kParamRelease:
                 return [NSString stringWithFormat:@"%.0f ms", v];
@@ -227,7 +276,7 @@ static constexpr int kFFTBins  = kFFTSize / 2;
 
 - (AUInternalRenderBlock)internalRenderBlock {
     __block lim::Limiter *dsp = _dsp.get();
-    __block std::atomic<float> *aG = &_gain, *aC = &_ceil, *aR = &_release;
+    __block std::atomic<float> *aG = &_gain, *aC = &_ceil, *aR = &_release, *aT = &_thr;
     __block float *ring = _ring;
     __block std::atomic<int> *ringWrite = &_ringWrite;
 
@@ -270,6 +319,7 @@ static constexpr int kFFTBins  = kFFTSize / 2;
         dsp->setInputGainDB(aG->load());
         dsp->setCeilingDB(aC->load());
         dsp->setReleaseMs(aR->load());
+        dsp->setThresholdDB(aT->load());
 
         if (outputData->mNumberBuffers < 2) {
             float *m = (float *)outputData->mBuffers[0].mData;

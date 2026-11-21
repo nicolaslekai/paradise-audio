@@ -15,17 +15,26 @@
 //    5. Apply the smoothed gain to the delayed (lookahead-aligned) sample
 //       so the gain reduction is applied at the right moment.
 //
-//  K-weighting / true integrated LUFS is out of scope here; instead the
-//  UI ships two presets that combine input GAIN + CEILING with values that
-//  push typical material to roughly broadcast (-23 LUFS) and streaming
-//  (-14 LUFS) loudness targets.
+//  THRESHOLD / CEILING (2026-11-21, classic mastering-limiter model):
+//    gain into the limiter = trim + (ceiling − threshold)
+//  so everything above THRESHOLD (in input dBFS, after the trim) is limited
+//  and the output peaks at CEILING. Pull the threshold down = more limiting,
+//  louder. The old model (drive = trim − ceiling) is the special case
+//  threshold = 2 × ceiling, which is how old sessions are migrated
+//  (LimiterAudioUnit -setFullState:) — bit-identical sound.
+//
+//  Display tap: one bucket of ~6 ms per pixel column (min/max of the trimmed
+//  input, min/max of the output, max gain reduction) in a fixed lock-free
+//  ring. The audio thread writes; the editor reads at <= 30 fps.
 //
 
 #pragma once
 
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <cmath>
+#include <cstdint>
 #include <vector>
 #include "Loudness.hpp"
 
@@ -52,6 +61,9 @@ public:
         waveCap_ = (int)std::round(sr_ * 2.0f);
         waveBuf_.assign(waveCap_, 0.0f);
         waveWrite_.store(0);
+        // Display tap: ~6 ms per bucket (one pixel column in the editor).
+        tapLen_ = std::max(16, (int)std::round(0.006f * sr_));
+        tapCount_ = 0; resetTapAcc();
         // Attack ramp: reaches ~99.8 % of the target within the lookahead.
         attackCoef_ = 1.0f - std::exp(-6.0f / (float)std::max(1, lookSamples_));
         updateReleaseCoef();
@@ -70,6 +82,7 @@ public:
         loudness_.reset();
         std::fill(waveBuf_.begin(), waveBuf_.end(), 0.0f);
         waveWrite_.store(0);
+        tapCount_ = 0; resetTapAcc();
     }
     /// Reset the integrated-loudness accumulator (UI "reset I" button).
     void resetIntegrated() { loudness_.reset(); }
@@ -78,10 +91,13 @@ public:
     void setCeilingDB(float db) {
         ceilingDB_ = std::min(0.0f, db);
         ceilingLin_ = std::pow(10.0f, ceilingDB_ / 20.0f);
-        // Auto make-up: lowering the ceiling drives the signal INTO the limiter
-        // so the ceiling actually limits (and the output is pushed up to it),
-        // instead of doing nothing until the source already exceeds it.
-        autoMakeupLin_ = std::pow(10.0f, (-ceilingDB_) / 20.0f);
+        updateMakeup();
+    }
+    /// Threshold in dBFS of the (trimmed) input. Make-up = ceiling − threshold,
+    /// so the signal at the threshold comes out exactly at the ceiling.
+    void setThresholdDB(float db) {
+        thresholdDB_ = std::max(-60.0f, std::min(24.0f, db));
+        updateMakeup();
     }
     void setReleaseMs(float ms) { releaseMs_ = std::max(1.0f, ms); updateReleaseCoef(); }
 
@@ -111,11 +127,32 @@ public:
         return count;
     }
 
+    /// Display tap. Copies up to `n` of the newest buckets into `out`
+    /// (5 floats each: inHi, inLo, outHi, outLo, grDB), OLDEST first, and
+    /// returns how many it copied. `*writeCount` gets the running bucket
+    /// counter so the reader can tell how many buckets are new.
+    int readTap(float* out, int n, uint32_t* writeCount) const {
+        const uint32_t w = tapWrite_.load(std::memory_order_acquire);
+        if (writeCount) *writeCount = w;
+        if (!out || n <= 0) return 0;
+        const int count = (int)std::min<uint32_t>((uint32_t)std::min(n, kTapSize), w);
+        for (int i = 0; i < count; ++i) {
+            const TapBucket& b = tap_[(w - (uint32_t)count + (uint32_t)i) & (uint32_t)(kTapSize - 1)];
+            out[i * 5 + 0] = b.inHi;  out[i * 5 + 1] = b.inLo;
+            out[i * 5 + 2] = b.outHi; out[i * 5 + 3] = b.outLo;
+            out[i * 5 + 4] = b.grDB;
+        }
+        return count;
+    }
+    /// Seconds of audio per tap bucket (one editor pixel column).
+    float tapBucketSeconds() const { return (float)tapLen_ / sr_; }
+    static constexpr int kTapSize = 2048;   // buckets in the ring (power of two)
+
     inline void processFrame(float& L, float& R) {
-        // 1. Input gain (user drive × ceiling auto make-up, so the ceiling
-        //    pushes the signal up to itself and limits audibly)
-        L *= inputGainLin_ * autoMakeupLin_;
-        R *= inputGainLin_ * autoMakeupLin_;
+        // 1. Drive = trim × make-up (ceiling − threshold): the threshold level
+        //    is pushed up to the ceiling, everything above it gets limited.
+        L *= inputGainLin_ * makeupLin_;
+        R *= inputGainLin_ * makeupLin_;
 
         // 2. Write into the lookahead ring + record this sample's peak
         const int N = (int)bufL_.size();
@@ -183,9 +220,37 @@ public:
             waveBuf_[w] = 0.5f * (outL + outR);
             waveWrite_.store((w + 1) % waveCap_, std::memory_order_relaxed);
         }
+
+        // 9. Display tap — input side is the delayed (time-aligned) sample,
+        //    still in drive units; it is scaled back to input dBFS per bucket.
+        accInHi_  = std::max(accInHi_,  std::max(dL, dR));
+        accInLo_  = std::min(accInLo_,  std::min(dL, dR));
+        accOutHi_ = std::max(accOutHi_, std::max(outL, outR));
+        accOutLo_ = std::min(accOutLo_, std::min(outL, outR));
+        accMinGain_ = std::min(accMinGain_, currentGain_);
+        if (++tapCount_ >= tapLen_) {
+            const uint32_t w = tapWrite_.load(std::memory_order_relaxed);
+            TapBucket& b = tap_[w & (uint32_t)(kTapSize - 1)];
+            b.inHi  = accInHi_ * invMakeupLin_;
+            b.inLo  = accInLo_ * invMakeupLin_;
+            b.outHi = accOutHi_;
+            b.outLo = accOutLo_;
+            b.grDB  = accMinGain_ < 0.99999f ? -20.0f * std::log10(std::max(accMinGain_, 1e-6f)) : 0.0f;
+            tapWrite_.store(w + 1, std::memory_order_release);
+            tapCount_ = 0; resetTapAcc();
+        }
     }
 
 private:
+    void updateMakeup() {
+        // Old sessions: threshold = 2 × ceiling ⇒ ceiling − threshold = −ceiling,
+        // the exact float the old auto make-up used (bit-identical output).
+        makeupLin_ = std::pow(10.0f, (ceilingDB_ - thresholdDB_) / 20.0f);
+        invMakeupLin_ = 1.0f / std::max(makeupLin_, 1e-9f);
+    }
+    void resetTapAcc() {
+        accInHi_ = accOutHi_ = 0.0f; accInLo_ = accOutLo_ = 0.0f; accMinGain_ = 1.0f;
+    }
     void updateReleaseCoef() {
         const float tau = releaseMs_ * 0.001f * sr_;
         releaseCoef_ = 1.0f - std::exp(-1.0f / std::max(1.0f, tau));
@@ -202,7 +267,9 @@ private:
     float inputGainLin_ = 1.0f;
     float ceilingDB_    = -1.0f;
     float ceilingLin_   = std::pow(10.0f, -1.0f / 20.0f);
-    float autoMakeupLin_ = std::pow(10.0f, 1.0f / 20.0f);   // = 10^(-ceilingDB/20)
+    float thresholdDB_  = -2.0f;                            // default = 2 × default ceiling
+    float makeupLin_    = std::pow(10.0f, 1.0f / 20.0f);   // = 10^((ceiling − threshold)/20)
+    float invMakeupLin_ = std::pow(10.0f, -1.0f / 20.0f);
     float releaseMs_    = 80.0f;
     float releaseCoef_  = 0.0f;
     float attackCoef_   = 0.025f;
@@ -215,6 +282,12 @@ private:
     std::vector<float> waveBuf_;
     int                waveCap_   = 0;
     mutable std::atomic<int> waveWrite_{0};
+    // Display tap (fixed size: never reallocated while the editor reads it).
+    struct TapBucket { float inHi = 0, inLo = 0, outHi = 0, outLo = 0, grDB = 0; };
+    std::array<TapBucket, kTapSize> tap_{};
+    std::atomic<uint32_t> tapWrite_{0};
+    int   tapLen_ = 288, tapCount_ = 0;
+    float accInHi_ = 0, accInLo_ = 0, accOutHi_ = 0, accOutLo_ = 0, accMinGain_ = 1;
 };
 
 } // namespace lim
