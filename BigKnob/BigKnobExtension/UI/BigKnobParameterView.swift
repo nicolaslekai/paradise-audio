@@ -195,25 +195,28 @@ final class GiantKnob: NSView {
         // brushed-silver knob shows around it (was a big cap covering it).
         // Dark recessed hub (same as PitchKnob's) — the cream cap read as a
         // sticker on the disc.
-        let capR = bodyR * 0.22
-        ctx.setFillColor(NSColor(calibratedWhite: 0.10, alpha: 0.55).cgColor)
-        ctx.fillEllipse(in: NSRect(x: cx - capR, y: cy - capR, width: capR * 2, height: capR * 2))
-        ctx.setStrokeColor(NSColor.black.withAlphaComponent(0.5).cgColor); ctx.setLineWidth(0.8)
-        ctx.strokeEllipse(in: NSRect(x: cx - capR, y: cy - capR, width: capR * 2, height: capR * 2))
-        // Centre DISTORTION knob — hub dot + a red pointer on the cap that
-        // tracks the distortion amount, plus a faint sweep arc so it reads as
-        // its own little knob.
-        ctx.setStrokeColor(red.withAlphaComponent(0.25).cgColor); ctx.setLineWidth(1.0)
-        ctx.addArc(center: NSPoint(x: cx, y: cy), radius: capR * 0.78,
-                   startAngle: .pi * 1.25, endAngle: -.pi * 0.25, clockwise: true)
+        // Centre sub-knob (2026-11-21, Nicky: "come up with something else for the knob in the
+        // middle … reuse a blender one"): the suite's Blender-rendered fluted knob sits in the dish,
+        // with a cream screen-printed tick ring and the same painted pointer as every other knob.
+        let capR = bodyR * 0.30
+        let s0: CGFloat = .pi * 1.25, e0: CGFloat = -.pi * 0.25
+        ctx.setStrokeColor(Palette.inkLight.withAlphaComponent(0.75).cgColor); ctx.setLineWidth(1.0)
+        for i in 0..<11 {
+            let a = s0 - CGFloat(i) / 10 * (s0 - e0)
+            let r0 = capR + 4, r1 = capR + (i == 0 || i == 5 || i == 10 ? 10 : 7)
+            ctx.move(to: NSPoint(x: cx + cos(a) * r0, y: cy + sin(a) * r0)); ctx.addLine(to: NSPoint(x: cx + cos(a) * r1, y: cy + sin(a) * r1))
+        }
         ctx.strokePath()
-        ctx.setFillColor(red.cgColor)
-        ctx.fillEllipse(in: NSRect(x: cx - 3, y: cy - 3, width: 6, height: 6))
-        let cAng = (.pi * 1.25) - CGFloat(centerValue) * (.pi * 1.5)
-        let cc1 = NSPoint(x: cx + cos(cAng) * (capR * 0.22), y: cy + sin(cAng) * (capR * 0.22))
-        let cc2 = NSPoint(x: cx + cos(cAng) * (capR * 0.85), y: cy + sin(cAng) * (capR * 0.85))
-        ctx.setStrokeColor(red.cgColor); ctx.setLineWidth(2.5); ctx.setLineCap(.round)
-        ctx.move(to: cc1); ctx.addLine(to: cc2); ctx.strokePath()
+        let subStyle: KnobStyle = .gunmetal
+        if !KnobTex.draw(ctx, center: NSPoint(x: cx, y: cy), radius: capR, image: subStyle) {
+            ctx.setFillColor(NSColor(calibratedWhite: 0.16, alpha: 1).cgColor)
+            ctx.fillEllipse(in: NSRect(x: cx - capR, y: cy - capR, width: capR * 2, height: capR * 2))
+        }
+        let cAng = s0 - CGFloat(centerValue) * (s0 - e0)
+        ctx.setStrokeColor(KnobSkin.pointerColor(for: subStyle).cgColor)
+        ctx.setLineWidth(max(2.5, capR * 0.11)); ctx.setLineCap(.round)
+        ctx.move(to: NSPoint(x: cx + cos(cAng) * (capR * 0.30), y: cy + sin(cAng) * (capR * 0.30)))
+        ctx.addLine(to: NSPoint(x: cx + cos(cAng) * (capR * 0.80), y: cy + sin(cAng) * (capR * 0.80))); ctx.strokePath()
         // Indicator DIVOT on the knob face (no more pointer line). A small
         // recessed dot near the rim that orbits with the value, so it reads as
         // the physical knob turning to point at the setting.
@@ -236,7 +239,7 @@ final class GiantKnob: NSView {
         let p = convert(e.locationInWindow, from: nil)
         let b = bounds.insetBy(dx: 4, dy: 4)
         let rad = min(b.width, b.height) * 0.5
-        let capR = (rad - 18) * 0.22          // same radius the hub is DRAWN with
+        let capR = (rad - 18) * 0.30          // same radius the sub-knob is DRAWN with
         let dx = p.x - b.midX, dy = p.y - b.midY
         draggingCenter = (dx * dx + dy * dy) <= (capR * 1.3) * (capR * 1.3)
         dragStartY = e.locationInWindow.y
