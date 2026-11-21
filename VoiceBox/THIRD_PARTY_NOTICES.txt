@@ -41,3 +41,9 @@ binary distribution. Show this file in the About box or ship it with the install
 The PSOLA engine (Psola.hpp) is in-house (Moulines & Charpentier 1990); its
 structure follows sannawag/TD-PSOLA (MIT, Copyright (c) 2019 Sanna Wager) but
 no code was copied.
+
+Voice Box head artwork
+----------------------
+The singing head in the display is rendered from the "Head (Animation) - Realistic"
+base mesh of the Blender Studio Human Base Meshes bundle, released under CC0
+(public domain). https://www.blender.org/download/demo-files/

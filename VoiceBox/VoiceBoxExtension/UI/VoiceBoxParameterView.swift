@@ -22,8 +22,8 @@ import AudioToolbox
 
 // MARK: - Singing head (5 rendered frames, or a procedural placeholder)
 
-/// Head artwork: `voicebox_head_f0_KJ_v001.png` … `f4` (1200 × 1200, alpha,
-/// profile facing right, mouth closed → fully open) plus the mouth centre per
+/// Head artwork: `voicebox_head_f0_KJ_v002.png` … `f4` (square, alpha,
+/// facing right, mouth closed → fully open; Tools/voicebox_head/head_blender.py) plus the mouth centre per
 /// frame. The anchor comes from `voicebox_head_mouth.json` when bundled —
 ///   {"image_size": [1200, 1200], "frames": [[x, y], …]}   (pixels, top-left origin)
 /// ( `{"f0": {"x":…, "y":…}, …}` and `{"frames": [{"x":…, "y":…}, …]}` work too ) —
@@ -40,7 +40,7 @@ enum VBHeadArt {
         let bundle = Bundle(for: VBVoiceStrip.self)
         var out: [CGImage] = []
         for i in 0..<frameCount {
-            guard let u = bundle.url(forResource: "voicebox_head_f\(i)_KJ_v001", withExtension: "png"),
+            guard let u = bundle.url(forResource: "voicebox_head_f\(i)_KJ_v002", withExtension: "png"),
                   let img = NSImage(contentsOf: u),
                   let cg = img.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return nil }
             out.append(cg)
