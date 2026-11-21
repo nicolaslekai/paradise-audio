@@ -16,6 +16,29 @@ inline float fastNoise(uint32_t &state) {
     return ((state >> 8) & 0x00FFFFFF) / 8388608.0f - 1.0f;
 }
 
+/// ── Sample-rate independence ────────────────────────────────────────
+/// Every voice was voiced at 48 kHz with PER-SAMPLE constants: envelope
+/// multipliers like 0.9995, DC-blocker poles, one white-noise value per
+/// sample. Left as they were, each drum decayed twice as fast at 96 kHz
+/// (9 % slower at 44.1 kHz) and its noise sat 3 dB lower in the audible band.
+///
+///  rk(c, rr)  converts a per-sample multiplier c (close to 1) tuned at 48 kHz
+///             to the running rate, rr = 48000 / sr: the same decay per second.
+///             First-order form of c^rr — exact at 48 kHz (bit-identical) and
+///             within 0.2 % of the decay rate elsewhere, with no pow() per sample.
+///  RateNoise  hands out a new white-noise value every `div` samples (1 below
+///             80 kHz, 2 up to 160 kHz, 4 above), so the noise keeps its
+///             48 kHz level per Hz and its 48 kHz statistics.
+inline float rk(float c, float rr) { return 1.0f - rr * (1.0f - c); }
+struct RateNoise {
+    int div = 1, tick = 0; float held = 0.0f;
+    void prepare(float sr) { div = (sr >= 160000.0f) ? 4 : (sr >= 80000.0f ? 2 : 1); tick = 0; held = 0.0f; }
+    inline float next(uint32_t &state) {
+        if (++tick >= div) { tick = 0; held = fastNoise(state); }
+        return held;
+    }
+};
+
 /// ── Shared building blocks ──────────────────────────────────────────
 /// TPT state-variable filter (Zavalishin). One process() call yields the
 /// low-, band- and high-pass outputs simultaneously — needed for the hat's
@@ -156,7 +179,7 @@ public:
         switch (c) { case 1: return "909"; case 2: return "LINN";
                      case 3: return "DMX"; case 4: return "ACOUS"; default: return "808"; }
     }
-    void prepare(float sr) { sr_ = sr; reset(); }
+    void prepare(float sr) { sr_ = sr; rr_ = 48000.0f / sr; nz_.prepare(sr); reset(); }
     void reset() {
         active_ = false; phase_ = 0; env_ = 0; pitchEnv_ = 0; vel_ = 0;
         clickEnv_ = 0; clickBp_.reset(); dcX_ = 0; dcY_ = 0;
@@ -217,7 +240,7 @@ public:
         body = transistorVCA(body, env_ * vel_ * drive);
 
         // ── Beater click — band-passed noise with its own short envelope ─
-        clickBp_.process(fastNoise(rng_));
+        clickBp_.process(nz_.next(rng_));
         const float click = clickBp_.bp() * clickEnv_ * clickEnv_ * clickAmt * vel_ * 1.6f;
         clickEnv_ *= clickDecay_;
         if (clickEnv_ < 0.0f) clickEnv_ = 0.0f;
@@ -226,11 +249,11 @@ public:
         if (lofi) out = std::round(out * 128.0f) / 128.0f;
 
         // DC blocker — the transistor VCA stage is asymmetric on purpose.
-        const float dc = out - dcX_ + 0.9985f * dcY_;
+        const float dc = out - dcX_ + rk(0.9985f, rr_) * dcY_;
         dcX_ = out; dcY_ = dc;
 
-        env_      *= envDecay;
-        pitchEnv_ *= pitchDecay;
+        env_      *= rk(envDecay, rr_);
+        pitchEnv_ *= rk(pitchDecay, rr_);
         if (env_ < 0.0008f) active_ = false;
         return dc * 0.72f;
     }
@@ -242,6 +265,7 @@ private:
     float phase_ = 0, env_ = 0, pitchEnv_ = 0, vel_ = 0;
     float clickEnv_ = 0, clickDecay_ = 0.99f;
     float dcX_ = 0, dcY_ = 0;
+    float rr_ = 1.0f; RateNoise nz_;
     SVF   clickBp_;
     uint32_t rng_ = 0xCAFEBABEu;
 };
@@ -270,7 +294,7 @@ public:
         switch (c) { case 1: return "909"; case 2: return "CLAP";
                      case 3: return "LINN"; case 4: return "AMEN"; default: return "STD"; }
     }
-    void prepare(float sr) { sr_ = sr; reset(); }
+    void prepare(float sr) { sr_ = sr; rr_ = 48000.0f / sr; nz_.prepare(sr); reset(); }
     void reset() {
         active_ = false; p1_ = 0; p2_ = 0;
         envBody_ = 0; envNoise_ = 0; pitchEnv_ = 0; vel_ = 0;
@@ -328,7 +352,7 @@ private:
         drum *= envBody_ * 0.72f;
 
         // Noise: resonant LP into a 1-pole HP — the 909's snare-wire band.
-        const float raw = fastNoise(rng_);
+        const float raw = nz_.next(rng_);
         noiseLp_.process(raw);
         const float lp = noiseLp_.lp();
         const float fcHp = clamp(10.0f * f0 * sr_, 80.0f, 12000.0f);
@@ -338,13 +362,13 @@ private:
         const float noise = (hp + 0.1f) * (envNoise_ + fm_) * 0.85f;
 
         // Envelopes: body decays long, noise holds then decays.
-        envBody_ *= 0.99820f;
-        if (holdCounter_ > 0) --holdCounter_; else envNoise_ *= 0.99930f;
+        envBody_ *= rk(0.99820f, rr_);
+        if (holdCounter_ > 0) --holdCounter_; else envNoise_ *= rk(0.99930f, rr_);
         fm_ *= 1.0f - 1.0f / (0.007f * sr_);
         if (fm_ < 0.0f) fm_ = 0.0f;
         if (envBody_ < 0.001f && envNoise_ < 0.001f) active_ = false;
         const float mix = (drum + noise) * vel_ * 0.45f;
-        const float dc = mix - dcX_ + 0.9985f * dcY_;
+        const float dc = mix - dcX_ + rk(0.9985f, rr_) * dcY_;
         dcX_ = mix; dcY_ = dc;
         return dc;
     }
@@ -385,16 +409,16 @@ private:
 
         // Wires: resonant LP at ~4x the corner, then 1-pole HP at the corner.
         noiseLp_.set(clamp(hpBase * 4.5f * pitchScale_, 300.0f, 16000.0f), noiseQ, sr_);
-        noiseLp_.process(fastNoise(rng_) * envNoise_);
+        noiseLp_.process(nz_.next(rng_) * envNoise_);
         const float lp = noiseLp_.lp();
         const float fc = clamp(hpBase * pitchScale_, 80.0f, 14000.0f);
         const float a = std::exp(-2.0f * kPi * fc / sr_);
         const float hp = a * (hpY_ + lp - hpX_);
         hpY_ = hp; hpX_ = lp;
 
-        envBody_  *= bodyDecay;
-        envNoise_ *= noiseDecay;
-        pitchEnv_ *= 0.9920f;
+        envBody_  *= rk(bodyDecay, rr_);
+        envNoise_ *= rk(noiseDecay, rr_);
+        pitchEnv_ *= rk(0.9920f, rr_);
         if (envBody_ < 0.001f && envNoise_ < 0.001f) active_ = false;
         return (body * bodyAmp + hp * noiseAmp * 1.35f) * vel_ * 0.75f;
     }
@@ -409,6 +433,7 @@ private:
     int   holdCounter_ = 0;
     float hpY_ = 0, hpX_ = 0;
     float dcX_ = 0, dcY_ = 0;
+    float rr_ = 1.0f; RateNoise nz_;
     SVF   noiseLp_;
     uint32_t rng_ = 0xDEADBEEFu;
 };
@@ -423,7 +448,7 @@ private:
 ///     dramatically (high = brittle snap, low = woody slap).
 class Clap {
 public:
-    void prepare(float sr) { sr_ = sr; reset(); }
+    void prepare(float sr) { sr_ = sr; rr_ = 48000.0f / sr; nz_.prepare(sr); reset(); }
     void reset() {
         active_ = false; samplesElapsed_ = 0; env_ = 0; vel_ = 0;
         bp1L_ = bp1B_ = 0; bp2L_ = bp2B_ = 0;
@@ -465,7 +490,7 @@ public:
             }
             if (gateEnv == 0.0f && s >= tailStart) gateEnv = env_;
         }
-        const float raw = fastNoise(rng_) * gateEnv * vel_;
+        const float raw = nz_.next(rng_) * gateEnv * vel_;
         // Two band-passes via SVF-style: each yields a band-pass output from
         // (raw, lowpass state, band-pass state). 6 ops per BP — cheap.
         const float fHi = clamp(fHiBase * pitchScale_, 200.0f, 14000.0f);
@@ -496,7 +521,7 @@ public:
                               : (character_ == 1) ? 0.99550f   // 909    — tight
                               : (character_ == 2) ? 0.99500f   // LINN   — gated
                                                   : 0.99700f;  // 808
-        if (s >= tailStart) env_ *= tailDecay;
+        if (s >= tailStart) env_ *= rk(tailDecay, rr_);
         samplesElapsed_++;
         const float maxLen = (character_ == 4) ? 1.2f : 0.5f;  // WASH rings longer
         if (samplesElapsed_ > (int)(maxLen * sr_)) active_ = false;
@@ -512,12 +537,13 @@ private:
     float bp1L_ = 0, bp1B_ = 0;   // hi-band SVF states
     float bp2L_ = 0, bp2B_ = 0;   // lo-band SVF states
     float snapOut_ = 0, bodyOut_ = 0;
+    float rr_ = 1.0f; RateNoise nz_;
     uint32_t rng_ = 0xFADECAFEu;
 };
 
 class Tom {
 public:
-    void prepare(float sr) { sr_ = sr; reset(); }
+    void prepare(float sr) { sr_ = sr; rr_ = 48000.0f / sr; reset(); }
     void setHz(float hz) { baseHz_ = hz; }
     void setPitch(float scale) { pitchScale_ = clamp(scale, 0.0625f, 16.0f); }
     /// Tom character (5): 0 STD, 1 DEEP, 2 ROTO (big pitch sweep),
@@ -546,15 +572,15 @@ public:
         if (phase_ > 2.0f * kPi) phase_ -= 2.0f * kPi;
         float s = std::sin(phase_) * env_ * vel_;
         if (lofi) s = std::round(s * 64.0f) / 64.0f;   // LINN sampled grit
-        env_      *= envDecay;
-        pitchEnv_ *= pEnvDecay;
+        env_      *= rk(envDecay, rr_);
+        pitchEnv_ *= rk(pEnvDecay, rr_);
         if (env_ < 0.001f) active_ = false;
         return s * 0.75f;
     }
 private:
     int   character_ = 0;
     float sr_ = 48000, baseHz_ = 90.0f;
-    float pitchScale_ = 1.0f;
+    float pitchScale_ = 1.0f, rr_ = 1.0f;
     bool active_ = false; float phase_ = 0, env_ = 0, pitchEnv_ = 0, vel_ = 0;
 };
 
@@ -576,7 +602,7 @@ public:
         switch (c) { case 1: return "HI"; case 2: return "WOOD";
                      case 3: return "AMEN"; case 4: return "THINK"; default: return "STD"; }
     }
-    void prepare(float sr) { sr_ = sr; reset(); }
+    void prepare(float sr) { sr_ = sr; rr_ = 48000.0f / sr; nz_.prepare(sr); reset(); }
     void setPitch(float scale) { pitchScale_ = clamp(scale, 0.0625f, 16.0f); }
     void setCharacter(int c) { character_ = std::max(0, std::min(kNumChars - 1, c)); }
     int  character() const { return character_; }
@@ -615,7 +641,7 @@ public:
         const float body = std::sin(bodyP1_) * 0.55f + std::sin(bodyP2_) * 0.35f;
 
         // ── Snare wires — broadband noise band-passed at 5k + 2.2k ─────
-        const float raw = fastNoise(rng_);
+        const float raw = nz_.next(rng_);
         const float fHi  = clamp(5000.0f * pitchScale_, 500.0f, 14000.0f);
         const float fMid = clamp(2200.0f * pitchScale_, 300.0f, 10000.0f);
         const float gHi  = std::tan(kPi * fHi  / sr_);
@@ -633,7 +659,7 @@ public:
         bpMidB_ = gMid * hpMid + bpMid; bpMidL_ = gMid * bpMid + lpMid;
 
         // ── Envelope (decayRate from the per-character recipe above) ────
-        env_ *= decayRate;
+        env_ *= rk(decayRate, rr_);
         if (env_ < 0.001f) active_ = false;
 
         // ── Mix — body vs. wire balance set by the character ────────────
@@ -651,6 +677,7 @@ private:
     float bpHiL_ = 0, bpHiB_ = 0;
     float bpMidL_ = 0, bpMidB_ = 0;
     float bodyP1_ = 0, bodyP2_ = 0;
+    float rr_ = 1.0f; RateNoise nz_;
     uint32_t rng_ = 0xBEEF5A11u;
 };
 
@@ -692,7 +719,7 @@ public:
                      case 5: return "TRAP"; case 6: return "CRISP";
                      case 7: return "SHAKR"; case 8: return "LOFI"; default: return "WHT"; }
     }
-    void prepare(float sr) { sr_ = sr; rm_.prepare(sr); reset(); }
+    void prepare(float sr) { sr_ = sr; rr_ = 48000.0f / sr; nz_.prepare(sr); rm_.prepare(sr); reset(); }
     void setOpen(bool o) { open_ = o; }
     /// Legacy entry point. The engine hands the mid hat a per-sample envelope
     /// coefficient (0.9985); convert it into this voice's 0..1 DECAY so the
@@ -792,8 +819,8 @@ public:
 
         // Two-stage envelope coefficients (computed once per hit, not per
         // sample — pow() in the audio loop is not free).
-        envDecay_ = 1.0f - 0.0030f * std::pow(2.0f, -d * 7.0f);
-        cutDecay_ = 1.0f - 0.0025f * std::pow(2.0f, -d * 3.0f);
+        envDecay_ = 1.0f - rr_ * 0.0030f * std::pow(2.0f, -d * 7.0f);   // per-sample at 48 kHz → per second
+        cutDecay_ = 1.0f - rr_ * 0.0025f * std::pow(2.0f, -d * 3.0f);
         tickDecay_ = 1.0f - 1.0f / (0.0022f * sr_);   // ~2 ms transient
 
         env_     = 1.5f * (0.3f + 0.7f * vel_);
@@ -835,7 +862,7 @@ public:
 
         // ── Transient tick — the stick hitting the metal ────────────────
         if (tickAmt_ > 0.0f) {
-            out += fastNoise(rng_) * tickEnv_ * 0.9f;
+            out += nz_.next(rng_) * tickEnv_ * 0.9f;
             tickEnv_ *= tickDecay_;
             if (tickEnv_ < 0.0f) tickEnv_ = 0.0f;
         }
@@ -871,6 +898,7 @@ private:
 
     float env_ = 0, envSm_ = 0, atkCoef_ = 0.05f, vel_ = 0;
     float noiseClock_ = 0, noiseSample_ = 0;
+    float rr_ = 1.0f; RateNoise nz_;
 
     SquareNoise  sq_;
     RingModNoise rm_;
@@ -880,7 +908,7 @@ private:
 
 class Crash {
 public:
-    void prepare(float sr) { sr_ = sr; reset(); }
+    void prepare(float sr) { sr_ = sr; rr_ = 48000.0f / sr; nz_.prepare(sr); reset(); }
     void setPitch(float scale) { pitchScale_ = clamp(scale, 0.0625f, 16.0f); }
     /// Crash character (5): 0 STD (broad wash), 1 CHINA (trashy/bright),
     /// 2 SPLSH (short bright splash), 3 RIDE (tonal ping + long sustain),
@@ -904,7 +932,7 @@ public:
             case 4: fcBase = 2800; decayMul = 0.99965f; noiseAmp = 0.85f; pingAmp = 0.00f; pingHz = 0;   break; // 808
             case 0: default: fcBase = 2500; decayMul = 0.99975f; noiseAmp = 1.00f; pingAmp = 0.00f; pingHz = 0; break; // STD
         }
-        const float raw = fastNoise(rng_);
+        const float raw = nz_.next(rng_);
         // Squared pitch mapping — much more dramatic than linear. At +24st
         // (scale ≈ 4) cutoff is ~16x default; at -24st (scale ≈ 0.25)
         // cutoff is ~16x lower. Plus a band-pass via additional LP.
@@ -922,7 +950,7 @@ public:
         // Slower decay at lower pitch for thunkier washes; quicker at high
         // pitch for splashy character (on top of the per-character base).
         const float decay = clamp(decayMul + (1.0f - pitchScale_) * 0.0001f, 0.99940f, 0.99992f);
-        env_ *= decay;
+        env_ *= rk(decay, rr_);
         if (env_ < 0.001f) active_ = false;
         return (hp * noiseAmp + ping) * env_ * vel_ * 0.5f;
     }
@@ -933,6 +961,7 @@ private:
     bool active_ = false; float env_ = 0, vel_ = 0;
     float hpY_ = 0, hpX_ = 0;
     float phase_ = 0;
+    float rr_ = 1.0f; RateNoise nz_;
     uint32_t rng_ = 0x87654321u;
 };
 
@@ -949,7 +978,7 @@ public:
         switch (c) { case 1: return "TIGHT"; case 2: return "WARM";
                      case 3: return "DROP"; case 4: return "REESE"; default: return "DEEP"; }
     }
-    void prepare(float sr) { sr_ = sr; reset(); }
+    void prepare(float sr) { sr_ = sr; rr_ = 48000.0f / sr; reset(); }
     void reset() { active_ = false; phase_ = 0; phase2_ = 0; env_ = 0; pitchEnv_ = 0; vel_ = 0; }
     void trigger(float v) { active_ = true; phase_ = 0; phase2_ = 0; env_ = 1.0f; pitchEnv_ = 1.0f; vel_ = v; }
     void setPitch(float scale) { pitchScale_ = clamp(scale, 0.0625f, 16.0f); }
@@ -988,14 +1017,14 @@ public:
             body = std::sin(phase_);
             if (mode == 1) body = std::tanh(body * 1.4f);   // WARM adds harmonic content
         }
-        env_      *= envDecay;
-        pitchEnv_ *= pitchDecay;
+        env_      *= rk(envDecay, rr_);
+        pitchEnv_ *= rk(pitchDecay, rr_);
         if (env_ < 0.001f) active_ = false;
         return body * env_ * vel_ * 0.95f;
     }
 private:
     float sr_ = 48000;
-    float pitchScale_ = 1.0f;
+    float pitchScale_ = 1.0f, rr_ = 1.0f;
     int   character_ = 0;
     bool active_ = false; float phase_ = 0, phase2_ = 0, env_ = 0, pitchEnv_ = 0, vel_ = 0;
 };

@@ -252,24 +252,53 @@ inline float polyBLEPPulse(float &phase, float incr, float width) {
 // Simple 4-pole ladder filter (Moog-ish, no oversampling — fine for monophonic synth).
 class Ladder {
 public:
-    void prepare(float sr) { sr_ = sr; reset(); }
+    void prepare(float sr) {
+        sr_ = sr;
+        // see sat(): (48k/sr)^0.65, fitted so the same patch has the same level
+        // at 44.1 / 48 / 96 kHz
+        satK_ = std::pow(48000.0f / std::max(8000.0f, sr), 0.65f);
+        reset();
+    }
     void reset() { for (int i = 0; i < 4; ++i) s_[i] = 0; }
-    void setCutoff(float hz) { cutoff_ = clampf(hz, 20.0f, sr_ * 0.45f); }
+    // Stage coefficient. The old one, f = 2·sin(π·fc/sr), is only a one-pole
+    // low-pass while f < 1; once the filter envelope opened the cutoff past
+    // sr/6 it went above 1 and each stage BOOSTED the top of the spectrum
+    // (+7 dB per stage at Nyquist at the default patch, 48 kHz). That was the
+    // ultrasonic hash that sat as loud as the whole audible band at 44.1/48 kHz
+    // (true peak 10 dB over the sample peak, chords over 0 dBFS) and was absent
+    // at 96 kHz, where the same patch was 4–5 dB "quieter".
+    // Now: the coefficient the 48 kHz build used for this cutoff (so nothing
+    // changes there while it was a real low-pass), capped just below 1, and
+    // converted to the running rate as the same analogue corner frequency.
+    void setCutoff(float hz) {
+        cutoff_ = clampf(hz, 20.0f, 20000.0f);
+        const float f48 = std::min(0.93f, 2.0f * std::sin(kPi * std::min(cutoff_, 12000.0f) / 48000.0f));
+        g_ = (sr_ == 48000.0f) ? f48 : 1.0f - std::pow(1.0f - f48, 48000.0f / sr_);
+    }
     void setReso(float q)    { reso_ = clampf(q, 0.0f, 4.0f); }
     inline float process(float x) {
-        const float f = 2.0f * std::sin(kPi * cutoff_ / sr_);
+        const float f = g_;
         float input = x - reso_ * s_[3];
-        // 4-pole cascade with tanh saturation
-        s_[0] = std::tanh(s_[0] + f * (std::tanh(input) - std::tanh(s_[0])));
-        s_[1] = std::tanh(s_[1] + f * (std::tanh(s_[0]) - std::tanh(s_[1])));
-        s_[2] = std::tanh(s_[2] + f * (std::tanh(s_[1]) - std::tanh(s_[2])));
-        s_[3] = std::tanh(s_[3] + f * (std::tanh(s_[2]) - std::tanh(s_[3])));
+        // 4-pole cascade with tanh saturation. The outer tanh squeezes each
+        // stage's STATE once per sample — a loss that accumulates per sample,
+        // so at 96 kHz it acted twice as often per second and the same patch
+        // came out quieter. sat() applies it in proportion to the sample period
+        // (exactly tanh at 48 kHz).
+        s_[0] = sat(s_[0] + f * (std::tanh(input) - std::tanh(s_[0])));
+        s_[1] = sat(s_[1] + f * (std::tanh(s_[0]) - std::tanh(s_[1])));
+        s_[2] = sat(s_[2] + f * (std::tanh(s_[1]) - std::tanh(s_[2])));
+        s_[3] = sat(s_[3] + f * (std::tanh(s_[2]) - std::tanh(s_[3])));
         return s_[3];
     }
 private:
     float sr_ = 48000;
     float cutoff_ = 5000.0f, reso_ = 0.3f;
+    float g_ = 0.6f, satK_ = 1.0f;
     float s_[4] = {0,0,0,0};
+    inline float sat(float v) const {
+        const float t = std::tanh(v);
+        return (sr_ == 48000.0f) ? t : v + satK_ * (t - v);
+    }
 };
 
 class ADSR {
@@ -357,7 +386,7 @@ private:
 // ─────────────────────────────────────────────────────────────────────
 class Voice {
 public:
-    static constexpr int kKsMax = 4096;          // delay-line size (down to ~12 Hz @48k)
+    static constexpr int kKsMax = 16384;         // delay-line size (down to ~12 Hz at 192 kHz; was 4096)
     static constexpr int kKsMask = kKsMax - 1;
 
     void prepare(float sr) {
@@ -371,6 +400,17 @@ public:
         body1_.set(sr, 466.0f, 3.5f);
         body2_.set(sr, 2300.0f, 1.6f);
         body3_.set(sr, 700.0f, 2.0f);   // broad body "honk" formant — extra wood
+        // Per-sample constants below were voiced at 48 kHz. rr converts a
+        // one-pole coefficient to the running rate (same corner frequency);
+        // the two noise-driven ones (alive drift, bow noise) are also only
+        // clocked every `div_` samples so their level stays the same.
+        div_ = (sr >= 160000.0f) ? 4 : (sr >= 80000.0f ? 2 : 1);
+        const float rr  = 48000.0f / std::max(8000.0f, sr);
+        const float rrN = rr * (float)div_;
+        kAlive_ = 1.0f - std::pow(1.0f - 0.0009f, rrN);
+        kBow_   = 1.0f - std::pow(1.0f - 0.25f, rrN);
+        kTilt_  = 1.0f - std::pow(1.0f - 0.05f, rr);
+        rr_ = rr;
         reset();
     }
     void reset() {
@@ -415,6 +455,7 @@ public:
     void setString(float decay, float damp) {
         ksDecay_ = clampf(decay, 0.80f, 0.9995f);
         ksDamp_  = clampf(damp,  0.02f, 0.95f);
+        ksDampR_ = 1.0f - std::pow(1.0f - ksDamp_, rr_);     // same loop-filter corner at every rate
     }
     // Bow friction noise level (0..1) and a high-pass tilt for ponticello.
     void setBow(float noise, float hpTilt) {
@@ -456,9 +497,12 @@ public:
         // tone is never frozen: bow speed/pressure micro-vary, nudging level and
         // brightness together. This continuous wander is the single biggest
         // "synth → actually played" cue, so it's deliberately subtle but always on.
-        rng_ = rng_ * 1664525u + 1013904223u;
-        const float awn = (((rng_ >> 8) & 0x00FFFFFF) / 8388608.0f - 1.0f);
-        aliveLp_ += 0.0009f * (awn - aliveLp_);
+        if (++aliveTick_ >= div_) {
+            aliveTick_ = 0;
+            rng_ = rng_ * 1664525u + 1013904223u;
+            const float awn = (((rng_ >> 8) & 0x00FFFFFF) / 8388608.0f - 1.0f);
+            aliveLp_ += kAlive_ * (awn - aliveLp_);
+        }
         const float aliveVal = clampf(aliveLp_ * 12.0f, -1.0f, 1.0f);
 
         // Vibrato — pitch wobble that BLOOMS in ~0.12 s after the bow lands
@@ -485,7 +529,7 @@ public:
         const float liveBright = plucked_ ? 0.0f : (0.10f * aliveVal);
         const float brightOct = (bright_ - 0.5f) * 2.0f + liveBright;   // -1..+1 octave
         const float cutoff = clampf(baseCutoff_ * std::pow(2.0f, brightOct + fenv * fenvAmt_ * 3.0f),
-                                     40.0f, sr_ * 0.45f);
+                                     40.0f, 20000.0f);
         filt_.setCutoff(cutoff);
         float y = filt_.process(raw);
 
@@ -526,9 +570,12 @@ private:
         // Helmholtz stick-slip motion locks in — a key bowed-onset cue, so it
         // fires even when steady-state bow noise is dialled out.
         if (bowNoise_ > 0.001f || onsetSec_ < 0.10f) {
-            rng_ = rng_ * 1664525u + 1013904223u;
-            const float wn = (((rng_ >> 8) & 0x00FFFFFF) / 8388608.0f - 1.0f);
-            bowLp_ += 0.25f * (wn - bowLp_);
+            if (++bowTick_ >= div_) {
+                bowTick_ = 0;
+                rng_ = rng_ * 1664525u + 1013904223u;
+                const float wn = (((rng_ >> 8) & 0x00FFFFFF) / 8388608.0f - 1.0f);
+                bowLp_ += kBow_ * (wn - bowLp_);
+            }
             const float chiff = std::exp(-onsetSec_ / 0.045f) * 0.5f;
             s += bowLp_ * (bowNoise_ * (0.10f + 0.30f * bright_) + chiff);
         }
@@ -542,7 +589,7 @@ private:
         // Sul-ponticello tilt — a one-pole high-pass blended in for the thin,
         // glassy "near the bridge" sound.
         if (hpTilt_ > 0.001f) {
-            hpZ_ += 0.05f * (out - hpZ_);
+            hpZ_ += kTilt_ * (out - hpZ_);
             const float hp = out - hpZ_;
             out = out * (1.0f - hpTilt_) + hp * hpTilt_ * 1.6f;
         }
@@ -556,13 +603,20 @@ private:
         // Fill the Di samples behind the write pointer with a shaped noise
         // burst. A one-pole LP on the burst sets the initial brightness.
         float lp = 0.0f;
-        const float burstLP = 0.15f + 0.55f * bright_;   // brighter pluck = more HF in burst
+        const float burstLP = 1.0f - std::pow(1.0f - (0.15f + 0.55f * bright_), rr_);   // brighter pluck = more HF in burst
+        float mean = 0.0f;
         for (int i = 1; i <= Di; ++i) {
             rng_ = rng_ * 1664525u + 1013904223u;
             const float wn = (((rng_ >> 8) & 0x00FFFFFF) / 8388608.0f - 1.0f);
             lp += burstLP * (wn - lp);
             ksBuf_[(ksW_ - i) & kKsMask] = lp;
+            mean += lp;
         }
+        // The burst's average is a DC offset that the loop (unity gain at DC)
+        // keeps circulating for as long as the note rings — it was the −38 dBFS
+        // of DC under plucked parts. Take it out of the excitation.
+        mean /= (float)Di;
+        for (int i = 1; i <= Di; ++i) ksBuf_[(ksW_ - i) & kKsMask] -= mean;
         ksLp_ = 0.0f;
         burstLeft_ = 0;
     }
@@ -578,7 +632,7 @@ private:
         const float s1 = ksBuf_[(i0 + 1) & kKsMask];
         const float out = s0 + fr * (s1 - s0);
         // Damping lowpass in the loop (sets timbre + decay character).
-        ksLp_ += ksDamp_ * (out - ksLp_);
+        ksLp_ += ksDampR_ * (out - ksLp_);
         ksBuf_[ksW_ & kKsMask] = ksDecay_ * ksLp_;
         ksW_ = (ksW_ + 1) & kKsMask;
         return out;
@@ -599,7 +653,9 @@ private:
     // Karplus-Strong state.
     float ksBuf_[kKsMax] = {0};
     int   ksW_ = 0, burstLeft_ = 0;
-    float ksLp_ = 0.0f, ksDecay_ = 0.996f, ksDamp_ = 0.5f;
+    float ksLp_ = 0.0f, ksDecay_ = 0.996f, ksDamp_ = 0.5f, ksDampR_ = 0.5f;
+    float rr_ = 1.0f, kAlive_ = 0.0009f, kBow_ = 0.25f, kTilt_ = 0.05f;
+    int   div_ = 1, aliveTick_ = 0, bowTick_ = 0;
     // Body resonators.
     BodyBP body0_, body1_, body2_, body3_;
     // Bowed "alive" drift + note-onset clock (vibrato bloom / bow-attack chiff).
@@ -615,6 +671,19 @@ private:
 // Tuned at the classic 44.1k constants; close enough at 48k.
 class MiniVerb {
 public:
+    // The comb / allpass lengths are the classic Freeverb constants IN SAMPLES,
+    // i.e. a room that halved in size (and in decay time) at 96 kHz. They are
+    // the 48 kHz sizes now and scale with the rate; the damping pole is
+    // converted the same way. 48 kHz is unchanged.
+    void prepare(float sr) {
+        const float k = std::max(0.5f, std::min((float)kMaxScale, sr / 48000.0f));
+        rate_ = 48000.0f / std::max(8000.0f, sr);
+        l0_ = (int)std::lround(kL0 * k); l1_ = (int)std::lround(kL1 * k);
+        l2_ = (int)std::lround(kL2 * k); l3_ = (int)std::lround(kL3 * k);
+        la0_ = (int)std::lround(kA0 * k); la1_ = (int)std::lround(kA1 * k);
+        setParams(fbSet_, dampSet_);
+        reset();
+    }
     void reset() {
         for (auto &b : c0_) b = 0; for (auto &b : c1_) b = 0;
         for (auto &b : c2_) b = 0; for (auto &b : c3_) b = 0;
@@ -623,23 +692,31 @@ public:
         lp0_ = lp1_ = lp2_ = lp3_ = 0;
     }
     // Reverb character — feedback (size/tail) + damping (brightness).
-    void setParams(float fb, float damp) { fb_ = fb; damp_ = damp; }
+    void setParams(float fb, float damp) {
+        if (fb == fbSet_ && damp == dampSet_ && rate_ == dampRate_) return;
+        fbSet_ = fb; dampSet_ = damp; dampRate_ = rate_;
+        fb_ = fb;
+        damp_ = (rate_ == 1.0f) ? damp : std::pow(std::max(1e-6f, damp), rate_);
+    }
     inline float process(float x) {
         float out = 0.0f;
-        out += comb(c0_, kL0, i0_, lp0_, x);
-        out += comb(c1_, kL1, i1_, lp1_, x);
-        out += comb(c2_, kL2, i2_, lp2_, x);
-        out += comb(c3_, kL3, i3_, lp3_, x);
+        out += comb(c0_, l0_, i0_, lp0_, x);
+        out += comb(c1_, l1_, i1_, lp1_, x);
+        out += comb(c2_, l2_, i2_, lp2_, x);
+        out += comb(c3_, l3_, i3_, lp3_, x);
         out *= 0.25f;
-        out = allpass(a0_, kA0, ia0_, out);
-        out = allpass(a1_, kA1, ia1_, out);
+        out = allpass(a0_, la0_, ia0_, out);
+        out = allpass(a1_, la1_, ia1_, out);
         return out;
     }
 private:
     static constexpr int kL0 = 1116, kL1 = 1188, kL2 = 1277, kL3 = 1356, kA0 = 556, kA1 = 441;
+    static constexpr int kMaxScale = 4;                 // up to 192 kHz
     float fb_ = 0.84f, damp_ = 0.2f;
-    float c0_[kL0] = {0}, c1_[kL1] = {0}, c2_[kL2] = {0}, c3_[kL3] = {0};
-    float a0_[kA0] = {0}, a1_[kA1] = {0};
+    float fbSet_ = 0.84f, dampSet_ = 0.2f, rate_ = 1.0f, dampRate_ = 1.0f;
+    int   l0_ = kL0, l1_ = kL1, l2_ = kL2, l3_ = kL3, la0_ = kA0, la1_ = kA1;
+    float c0_[kL0 * kMaxScale] = {0}, c1_[kL1 * kMaxScale] = {0}, c2_[kL2 * kMaxScale] = {0}, c3_[kL3 * kMaxScale] = {0};
+    float a0_[kA0 * kMaxScale] = {0}, a1_[kA1 * kMaxScale] = {0};
     int i0_ = 0, i1_ = 0, i2_ = 0, i3_ = 0, ia0_ = 0, ia1_ = 0;
     float lp0_ = 0, lp1_ = 0, lp2_ = 0, lp3_ = 0;
     inline float comb(float* buf, int len, int& idx, float& lp, float x) {
@@ -668,6 +745,17 @@ public:
         // characteristic "wob wob wob" filter motion.
         dubWobble_.prepare(sr);
         dubWobble_.setReso(3.2f);
+        // Per-sample smoothing constants were tuned at 48 kHz; convert them so
+        // gates, the chopper and the noise colour are the same at every rate.
+        const float rr = 48000.0f / std::max(8000.0f, sr);
+        kDubGate_  = 1.0f - std::pow(1.0f - 0.06f, rr);
+        kChopGain_ = 1.0f - std::pow(1.0f - 0.04f, rr);
+        kNoiseLp_  = 1.0f - std::pow(1.0f - 0.35f, rr);
+        noiseHold_ = (sr >= 160000.0f) ? 4 : (sr >= 80000.0f ? 2 : 1);   // hiss keeps its 48 kHz level per Hz
+        kNoiseLp_  = 1.0f - std::pow(1.0f - 0.35f, rr * (float)noiseHold_);
+        dlyLimit_  = std::min(kDlyMax - 1, (int)sr);                     // 1 s, as at 48 kHz
+        dcR_ = 1.0f - 2.0f * kPi * 5.0f / sr; dcX_ = dcY_ = 0.0f;
+        verb_.prepare(sr);
         // First prepare only: a re-allocate (sample-rate / buffer change, or a
         // host that restores state before allocating) must not wipe the
         // user's four grids and repaint the starter motifs.
@@ -1306,6 +1394,12 @@ public:
             if (droneInterval_ != 0) dSum += droneV2_.process();
             s += dSum * droneLevel_;
         }
+        // 5 Hz DC blocker on the voice sum (belt and braces: the plucked
+        // excitation is DC-free now, see Voice::excitePluck).
+        {
+            const float y = s - dcX_ + dcR_ * dcY_;
+            dcX_ = s; dcY_ = y; s = y;
+        }
 
         // ── DUBSTEP wobble — engine-level resonant LP swept by a pattern
         // sequencer. dubPattern_[step] picks the wobble division for the
@@ -1389,11 +1483,15 @@ public:
         // 3) NOISE: analog hiss floor — lightly LP'd white noise with the
         //    same trick the Drums use (decorrelated L/R taps).
         if (noiseAmt_ > 0.001f) {
-            noiseRng_ = noiseRng_ * 1664525u + 1013904223u;
-            const float wn  = (((noiseRng_ >> 8) & 0x00FFFFFF) / 8388608.0f - 1.0f);
-            noiseLpZ_ += 0.35f * (wn - noiseLpZ_);
-            noiseRng_ = noiseRng_ * 1664525u + 1013904223u;
-            const float wn2 = (((noiseRng_ >> 8) & 0x00FFFFFF) / 8388608.0f - 1.0f);
+            if (++noiseTick_ >= noiseHold_) {
+                noiseTick_ = 0;
+                noiseRng_ = noiseRng_ * 1664525u + 1013904223u;
+                const float wn  = (((noiseRng_ >> 8) & 0x00FFFFFF) / 8388608.0f - 1.0f);
+                noiseLpZ_ += kNoiseLp_ * (wn - noiseLpZ_);
+                noiseRng_ = noiseRng_ * 1664525u + 1013904223u;
+                noiseW2_ = (((noiseRng_ >> 8) & 0x00FFFFFF) / 8388608.0f - 1.0f);
+            }
+            const float wn2 = noiseW2_;
             const float n   = noiseLpZ_ * 0.5f + wn2 * 0.15f;
             const float amt = noiseAmt_ * 0.20f;
             outL += n * amt;
@@ -1449,7 +1547,7 @@ public:
                     break;
                 default: break;
             }
-            chopGain_ += 0.04f * (gTarget - chopGain_);     // de-click smoothing
+            chopGain_ += kChopGain_ * (gTarget - chopGain_);     // de-click smoothing
             const float gain = 1.0f - chopAmt_ * (1.0f - chopGain_);
             outL *= gain; outR *= gain;
         }
@@ -1468,7 +1566,7 @@ public:
             }
             int dlySamp = slap ? (int)(sr_ * 0.11f) : (int)(sr_ * 60.0f / bpm_ * beats);
             if (dlySamp < 1) dlySamp = 1;
-            if (dlySamp >= kDlyMax) dlySamp = kDlyMax - 1;
+            if (dlySamp > dlyLimit_) dlySamp = dlyLimit_;
             int rd = dlyW_ - dlySamp; if (rd < 0) rd += kDlyMax;
             const float dl = dlyL_[rd], dr = dlyR_[rd];
             if (ping) {
@@ -1498,8 +1596,11 @@ public:
         }
 
         // Gentle output saturation, then user-controlled output level.
-        outL = std::tanh(outL * 0.45f) * 1.4f * outputLevel_;
-        outR = std::tanh(outR * 0.45f) * 1.4f * outputLevel_;
+        // Same small-signal gain as before (0.45 × 1.4 = 0.63), but the curve
+        // tops out at 1.0 instead of 1.4, so full chords can no longer leave
+        // the stage above 0 dBFS (8 notes at velocity 127 reached +0.8 dBFS).
+        outL = std::tanh(outL * 0.63f) * outputLevel_;
+        outR = std::tanh(outR * 0.63f) * outputLevel_;
         s = 0.5f * (outL + outR);  // for the amplitude probe below
 
         // Sample-clock + amplitude probe for the visualizer.
@@ -1957,7 +2058,11 @@ private:
     float delayAmt_ = 0.0f, reverbAmt_ = 0.0f, chopAmt_ = 0.0f;
     int   delayType_ = 0, reverbType_ = 1, chopType_ = 0;
     float pingState_ = 0.0f;                         // ping-pong cross-feed
-    static constexpr int kDlyMax = 48000;            // up to 1s @48k
+    static constexpr int kDlyMax = 192000;           // 1 s up to 192 kHz (was 48000 samples: half a second at 96 kHz)
+    int   dlyLimit_ = 47999;
+    float dcX_ = 0.0f, dcY_ = 0.0f, dcR_ = 0.9993f;
+    float kDubGate_ = 0.06f, kChopGain_ = 0.04f, kNoiseLp_ = 0.35f, noiseW2_ = 0.0f;
+    int   noiseHold_ = 1, noiseTick_ = 0;
     float dlyL_[kDlyMax] = {0}, dlyR_[kDlyMax] = {0};
     int   dlyW_ = 0;
     MiniVerb verb_;

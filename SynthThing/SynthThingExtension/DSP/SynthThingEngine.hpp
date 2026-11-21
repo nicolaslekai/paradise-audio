@@ -1404,8 +1404,12 @@ public:
         }
 
         // Gentle output saturation, then user-controlled output level.
-        outL = std::tanh(outL * 0.45f) * 1.4f * outputLevel_;
-        outR = std::tanh(outR * 0.45f) * 1.4f * outputLevel_;
+        // Same small-signal gain as before (0.45 × 1.4 = 0.63), but the curve now
+        // tops out at 1.0 instead of 1.4: a single note is unchanged (−0.2 dB at
+        // most), while full chords can no longer leave the stage above 0 dBFS
+        // (4 notes at velocity 127 used to reach +1.6 dBFS, 8 notes +2.5).
+        outL = std::tanh(outL * 0.63f) * outputLevel_;
+        outR = std::tanh(outR * 0.63f) * outputLevel_;
         s = 0.5f * (outL + outR);  // for the amplitude probe below
 
         // Sample-clock + amplitude probe for the visualizer.

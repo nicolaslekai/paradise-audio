@@ -68,13 +68,19 @@ public:
         sr_ = sr;
         // 8 prime-ish comb lengths spread 24..55 ms at 48 kHz, plus a small
         // per-channel offset so L and R run different comb networks.
+        // The lengths are 48 kHz sample counts: scale them with the rate so the
+        // room (and its decay time) is the same at 44.1 / 96 kHz; the damping
+        // pole and the modulation depth are converted the same way.
+        const float k = sr / 48000.0f;
+        dampR_     = 1.0f - std::pow(1.0f - damp_, 1.0f / k);
+        modDepthR_ = modDepth_ * k;
         const int baseL[8] = { 1116, 1188, 1277, 1356, 1422, 1491, 1557, 1617 };
         const int spread   = 31;
         for (int ch = 0; ch < 2; ++ch) {
             for (int i = 0; i < 8; ++i) {
-                const int len = baseL[i] + (ch ? spread : 0);
+                const int len = (int)std::lround((float)(baseL[i] + (ch ? spread : 0)) * k);
                 comb_[ch][i].base = len;
-                comb_[ch][i].buf.assign(len + 64, 0.0f); // mod headroom
+                comb_[ch][i].buf.assign(len + 64 + (int)(4.0f * k), 0.0f); // mod headroom
                 comb_[ch][i].idx = 0;
                 comb_[ch][i].lp = 0;
                 comb_[ch][i].modPhase = (ch ? 0.7f : 0.0f) + i * 0.4f;
@@ -87,7 +93,7 @@ public:
         const int apLen[3] = { 556, 441, 341 };
         for (int ch = 0; ch < 2; ++ch) {
             for (int i = 0; i < 3; ++i) {
-                ap_[ch][i].buf.assign(apLen[i] + (ch ? 17 : 0), 0.0f);
+                ap_[ch][i].buf.assign((size_t)std::lround((float)(apLen[i] + (ch ? 17 : 0)) * k), 0.0f);
                 ap_[ch][i].idx = 0;
             }
         }
@@ -112,7 +118,7 @@ public:
                 // Modulated read offset around `base` samples ago
                 c.modPhase += c.modInc;
                 if (c.modPhase > 6.28318530718f) c.modPhase -= 6.28318530718f;
-                const float modOff = std::sin(c.modPhase) * modDepth_;
+                const float modOff = std::sin(c.modPhase) * modDepthR_;
                 float rf = (float)c.idx - (float)c.base + modOff;
                 while (rf < 0)       rf += (float)N;
                 while (rf >= (float)N) rf -= (float)N;
@@ -121,7 +127,7 @@ public:
                 const float fr = rf - (float)r0;
                 const float out = c.buf[r0] + fr * (c.buf[r1] - c.buf[r0]);
                 // 1-pole LP in the feedback path — damps highs in the tail
-                c.lp += damp_ * (out - c.lp);
+                c.lp += dampR_ * (out - c.lp);
                 c.buf[c.idx] = in + c.lp * feedback_;
                 if (++c.idx >= N) c.idx = 0;
                 sums[ch] += out;
@@ -156,6 +162,7 @@ private:
     float feedback_ = 0.85f;   // calmer than before — tails decay sooner
     float damp_     = 0.42f;   // more aggressive damping, less hiss in the tail
     float modDepth_ = 1.0f;    // smaller chorus depth — was reading as noise
+    float dampR_ = 0.42f, modDepthR_ = 1.0f;   // the two above, converted to the running rate
 };
 
 class DelayTap {
@@ -192,6 +199,8 @@ class DrumsEngine {
 public:
     void prepare(float sr) {
         sr_ = sr;
+        noiseDiv_ = (sr >= 160000.0f) ? 4 : (sr >= 80000.0f ? 2 : 1);
+        noiseLpK_ = 1.0f - std::pow(1.0f - 0.35f, 48000.0f * (float)noiseDiv_ / sr);
         k_.prepare(sr); s_.prepare(sr); c_.prepare(sr); r_.prepare(sr);
         t1_.prepare(sr); t1_.setHz(80);
         t2_.prepare(sr); t2_.setHz(140);
@@ -436,7 +445,8 @@ public:
         sb_.reset(); ls_.reset();
         for (int i = 0; i < kVoices; ++i) { dly_[i].reset(); filt_[i].reset(); }
         rev_.reset();
-        adaaXL_ = adaaFL_ = adaaXR_ = adaaFR_ = 0;
+        for (int i = 0; i < kAdaaMax; ++i) adaaXL_[i] = adaaFL_[i] = adaaXR_[i] = adaaFR_[i] = 0;
+        adaaW_ = 0;
         currentStep_ = 0; sampleAccum_ = 0;
     }
 
@@ -1234,11 +1244,17 @@ public:
         // so it reads as "tape hiss" rather than digital fizz. Decorrelated
         // L/R taps for natural width.
         if (globalNoise_ > 0.0001f) {
-            noiseRng_ = noiseRng_ * 1664525u + 1013904223u;
-            const float wn  = (((noiseRng_ >> 8) & 0x00FFFFFF) / 8388608.0f - 1.0f);
-            noiseLpZ_ += 0.35f * (wn - noiseLpZ_); // mild LP
-            noiseRng_ = noiseRng_ * 1664525u + 1013904223u;
-            const float wn2 = (((noiseRng_ >> 8) & 0x00FFFFFF) / 8388608.0f - 1.0f);
+            // (one new value per 48 kHz-sized tick, so the hiss has the same
+            //  level and colour at every sample rate)
+            if (++noiseTick_ >= noiseDiv_) {
+                noiseTick_ = 0;
+                noiseRng_ = noiseRng_ * 1664525u + 1013904223u;
+                const float wn  = (((noiseRng_ >> 8) & 0x00FFFFFF) / 8388608.0f - 1.0f);
+                noiseLpZ_ += noiseLpK_ * (wn - noiseLpZ_); // mild LP
+                noiseRng_ = noiseRng_ * 1664525u + 1013904223u;
+                noiseW2_ = (((noiseRng_ >> 8) & 0x00FFFFFF) / 8388608.0f - 1.0f);
+            }
+            const float wn2 = noiseW2_;
             const float n = noiseLpZ_ * 0.5f + wn2 * 0.15f;
             const float amt = globalNoise_ * 0.18f;  // scale so 1.0 = audible but not punishing
             mixL += n * amt;
@@ -1258,10 +1274,17 @@ public:
         // "hiss after every bassdrum hit"). Double precision drops that
         // cancellation error from ~-66 dB to inaudible. Fallback threshold
         // widened to 1e-4 so we switch to the stable midpoint form sooner.
+        // The difference is taken over one 48 kHz-sized step (1 sample below
+        // 80 kHz, 2 at 88.2/96 kHz, 4 above): ADAA is also a gentle top-end
+        // roll-off tied to that step, and taken over a single sample at 96 kHz
+        // the whole kit came out 3 dB brighter above 10 kHz than at 48 kHz.
         const double drive = 1.1;
-        auto adaa = [drive](float x, double &px, double &pf) -> float {
+        const int w = adaaW_;
+        auto adaa = [drive, w](float x, double *hx, double *hf) -> float {
             const double s  = (double)x * drive * 0.5;
             const double F  = std::log(std::cosh(s));
+            const double px = hx[w], pf = hf[w];        // what was written noiseDiv_ samples ago
+            hx[w] = s; hf[w] = F;
             const double dx = s - px;
             double y;
             if (std::fabs(dx) > 1e-4) {
@@ -1269,11 +1292,11 @@ public:
             } else {
                 y = std::tanh(0.5 * (s + px));
             }
-            px = s; pf = F;
             return (float)(y / drive * 1.05);
         };
         outL = adaa(mixL, adaaXL_, adaaFL_);
         outR = adaa(mixR, adaaXR_, adaaFR_);
+        if (++adaaW_ >= noiseDiv_) adaaW_ = 0;
     }
 
 private:
@@ -1314,7 +1337,9 @@ private:
     float reverbSend_[kVoices] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
     // ADAA state: previous-sample input + previous antiderivative value per
     // channel. MUST be double — see the adaa lambda for why (kick-hiss fix).
-    double adaaXL_ = 0, adaaFL_ = 0, adaaXR_ = 0, adaaFR_ = 0;
+    static constexpr int kAdaaMax = 4;
+    double adaaXL_[kAdaaMax] = {0}, adaaFL_[kAdaaMax] = {0}, adaaXR_[kAdaaMax] = {0}, adaaFR_[kAdaaMax] = {0};
+    int    adaaW_ = 0;
     bool  mute_[kVoices] = {};
     bool  solo_[kVoices] = {};
     bool  patterns_[kSlots][kVoices][kSteps] = {};
@@ -1351,6 +1376,8 @@ private:
     // AND quiet, matching how acoustic drums respond to lighter strikes.
     // 1.0 = no velocity-driven shortening (full hit).
     float voiceVelRate_[kVoices]   = {1,1,1,1,1,1,1,1,1,1,1,1};
+    int   noiseDiv_ = 1, noiseTick_ = 0;
+    float noiseLpK_ = 0.35f, noiseW2_ = 0.0f;
     // samples since this voice last fired — used by NUDGE preset to detect
     // rapid runs. Starts at "very large" so the first hit always reads as
     // isolated and plays full strength.
